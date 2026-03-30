@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pretext Lab</title>
+  <meta name="description" content="Text visual effects workbench — real-time preview, parameter tuning, and export.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <div class="topbar-left">
+        <span class="logo">Pretext Lab</span>
+      </div>
+      <div class="topbar-right">
+        <button class="tb-btn" id="btn-export">⤓ PNG</button>
+        <button class="tb-btn" id="btn-css">{ } CSS</button>
+        <button class="tb-btn" id="btn-bg">◐</button>
+        <button class="tb-btn" id="btn-lang">中文</button>
+      </div>
+    </header>
+    <div id="main">
+      <aside id="sidebar">
+        <div class="sb-input">
+          <textarea id="input-text" rows="3" placeholder="输入预览文字...">Pretext Lab — 纯算术文本测量与布局。支持中文、English、العربية 和 emoji 🚀</textarea>
+        </div>
+        <div id="sb-list"></div>
+      </aside>
+      <main id="preview"><canvas id="canvas"></canvas></main>
+      <aside id="panel">
+        <div class="panel-head" data-i18n="params">PARAMETERS</div>
+        <div id="panel-body"></div>
+      </aside>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
