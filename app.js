@@ -212,68 +212,98 @@ $('#input-img').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new 
 $('#btn-clear-img').onclick=()=>{globalImg=null;$('#img-name').textContent='';$('#btn-clear-img').hidden=true;$('#input-img').value='';
   const fx=effects[activeKey];if(fx?.init)fx.init();if(!fx?.animated)draw();};
 
-// ---- GIF export (pure canvas frame capture) ----
-$('#btn-export-gif').onclick=()=>{
-  const btn=$('#btn-export-gif');
-  if(btn._recording) return;
-  btn._recording=true;btn.classList.add('recording');btn.textContent='⏺ 0/60';
-  const frames=[];let f=0;const total=60;
-  const cap=()=>{
-    if(f>=total){
-      btn.textContent='⏳ Encoding...';
-      // encode as animated GIF using simple approach: download frames as WebM via MediaRecorder
-      // Since true GIF encoding in browser without library is complex, we use canvas recording
-      const stream=canvas.captureStream(30);
-      const recorder=new MediaRecorder(stream,{mimeType:MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm'});
-      const chunks=[];
-      recorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
-      recorder.onstop=()=>{
-        const blob=new Blob(chunks,{type:'video/webm'});
-        const a=document.createElement('a');a.download='pretext-lab.webm';a.href=URL.createObjectURL(blob);a.click();
-        btn.classList.remove('recording');btn.textContent='⤓ GIF';btn._recording=false;
-      };
-      recorder.start();
-      setTimeout(()=>recorder.stop(),2100);
-      return;
-    }
-    btn.textContent=`⏺ ${f}/${total}`;
-    f++;requestAnimationFrame(cap);
-  };
-  // Actually, let's just do a proper 2-second recording directly
-  const stream=canvas.captureStream(30);
-  const recorder=new MediaRecorder(stream,{mimeType:MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm'});
-  const chunks=[];
-  recorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
-  recorder.onstop=()=>{
-    const blob=new Blob(chunks,{type:'video/webm'});
-    const a=document.createElement('a');a.download='pretext-lab-anim.webm';a.href=URL.createObjectURL(blob);a.click();
-    btn.classList.remove('recording');btn.textContent='⤓ GIF';btn._recording=false;
-  };
-  recorder.start();
-  let elapsed=0;
-  const tick=()=>{elapsed++;btn.textContent=`⏺ ${elapsed}s`;if(elapsed<3)setTimeout(tick,1000);else recorder.stop();};
-  tick();
+// ---- ffmpeg.wasm lazy loader ----
+let _ffmpeg=null,_ffmpegLoading=false;
+async function getFFmpeg(){
+  if(_ffmpeg) return _ffmpeg;
+  if(_ffmpegLoading) {while(!_ffmpeg) await new Promise(r=>setTimeout(r,200)); return _ffmpeg;}
+  _ffmpegLoading=true;
+  try{
+    const {FFmpeg}=await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js');
+    const {toBlobURL}=await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js');
+    const ff=new FFmpeg();
+    const base='https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
+    await ff.load({
+      coreURL:await toBlobURL(`${base}/ffmpeg-core.js`,'text/javascript'),
+      wasmURL:await toBlobURL(`${base}/ffmpeg-core.wasm`,'application/wasm'),
+    });
+    _ffmpeg=ff;
+  }catch(e){
+    console.error('ffmpeg load error',e);
+    _ffmpegLoading=false;
+    throw new Error(lang==='zh'?'FFmpeg 加载失败，请确保网络通畅并刷新页面重试':'FFmpeg failed to load. Please refresh and try again.');
+  }
+  return _ffmpeg;
+}
+
+// record N seconds of canvas as WebM blob
+function recordCanvas(seconds){
+  return new Promise(resolve=>{
+    const mimeType=MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm';
+    const stream=canvas.captureStream(30);
+    const recorder=new MediaRecorder(stream,{mimeType});
+    const chunks=[];
+    recorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+    recorder.onstop=()=>resolve(new Blob(chunks,{type:'video/webm'}));
+    recorder.start();
+    setTimeout(()=>recorder.stop(),seconds*1000);
+  });
+}
+
+// ---- GIF export (real .gif via ffmpeg.wasm) ----
+$('#btn-export-gif').onclick=async()=>{
+  const btn=$('#btn-export-gif');if(btn._busy)return;btn._busy=true;
+  btn.classList.add('recording');btn.textContent='⏺ 3s...';
+  const webm=await recordCanvas(3);
+  btn.textContent='⏳ Loading FFmpeg...';
+  try{
+    const ff=await getFFmpeg();
+    const data=new Uint8Array(await webm.arrayBuffer());
+    await ff.writeFile('in.webm',data);
+    btn.textContent='⏳ Encoding GIF...';
+    await ff.exec(['-i','in.webm','-vf','fps=15,scale=480:-1:flags=lanczos','-loop','0','out.gif']);
+    const out=await ff.readFile('out.gif');
+    const blob=new Blob([out.buffer],{type:'image/gif'});
+    const a=document.createElement('a');a.download='pretext-lab.gif';a.href=URL.createObjectURL(blob);a.click();
+    await ff.deleteFile('in.webm');await ff.deleteFile('out.gif');
+  }catch(e){console.error(e);alert('GIF export failed: '+e.message);}
+  btn.classList.remove('recording');btn.textContent='⤓ GIF';btn._busy=false;
 };
 
-// ---- Video export (WebM, click to start, click again to stop) ----
-$('#btn-export-vid').onclick=()=>{
+// ---- MP4 export (real .mp4 via ffmpeg.wasm) ----
+$('#btn-export-vid').onclick=async()=>{
   const btn=$('#btn-export-vid');
-  if(btn._recording){btn._recorder.stop();return;}
+  // if currently recording a long session, stop it
+  if(btn._recorder){btn._recorder.stop();return;}
+  btn.classList.add('recording');btn._sec=0;
+  btn.textContent='⏹ 0s';
+  // start recording — user clicks again to stop
   const mimeType=MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm';
   const stream=canvas.captureStream(30);
   const recorder=new MediaRecorder(stream,{mimeType});
   const chunks=[];
   recorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
-  recorder.onstop=()=>{
-    const blob=new Blob(chunks,{type:'video/webm'});
-    const a=document.createElement('a');a.download='pretext-lab.webm';a.href=URL.createObjectURL(blob);a.click();
-    btn.classList.remove('recording');btn.textContent='⤓ Video';btn._recording=false;btn._sec=0;
-    clearInterval(btn._timer);
+  recorder.onstop=async()=>{
+    clearInterval(btn._timer);btn._recorder=null;
+    const webm=new Blob(chunks,{type:'video/webm'});
+    btn.textContent='⏳ Loading FFmpeg...';
+    try{
+      const ff=await getFFmpeg();
+      const data=new Uint8Array(await webm.arrayBuffer());
+      await ff.writeFile('in.webm',data);
+      btn.textContent='⏳ Encoding MP4...';
+      await ff.exec(['-i','in.webm','-c:v','libx264','-preset','fast','-crf','22','-pix_fmt','yuv420p','out.mp4']);
+      const out=await ff.readFile('out.mp4');
+      const blob=new Blob([out.buffer],{type:'video/mp4'});
+      const a=document.createElement('a');a.download='pretext-lab.mp4';a.href=URL.createObjectURL(blob);a.click();
+      await ff.deleteFile('in.webm');await ff.deleteFile('out.mp4');
+    }catch(e){console.error(e);alert('MP4 export failed: '+e.message);}
+    btn.classList.remove('recording');btn.textContent='⤓ Video';
   };
-  recorder.start();btn._recorder=recorder;btn._recording=true;btn._sec=0;
-  btn.classList.add('recording');btn.textContent='⏹ 0s';
+  recorder.start();btn._recorder=recorder;
   btn._timer=setInterval(()=>{btn._sec++;btn.textContent=`⏹ ${btn._sec}s`;},1000);
-};// ============ EFFECTS ============
+};
+// ============ EFFECTS ============
 
 // ---- Multi-Column ----
 effects.multicolumn = {
