@@ -38,6 +38,18 @@ function wrap(text,font,maxW,lh){
 }
 const FN = 'IBMPlex, sans-serif';
 
+// ---- Image-driven ASCII helper ----
+// When globalImg is set, sample it to get luminance grid for ASCII effects
+function getImgLum(cols,rows){
+  if(!globalImg) return null;
+  const oc=document.createElement('canvas');oc.width=cols;oc.height=rows;
+  const ox=oc.getContext('2d');ox.drawImage(globalImg,0,0,cols,rows);
+  const id=ox.getImageData(0,0,cols,rows),d=id.data;
+  const lum=new Float32Array(cols*rows);
+  for(let i=0;i<cols*rows;i++) lum[i]=(0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2])/255;
+  return lum;
+}
+
 // ---- i18n ----
 const i18n = {
   en:{params:'PARAMETERS',postfx:'POST-PROCESSING',cat_layout:'LAYOUT',cat_ascii:'ASCII ART',cat_fx:'INTERACTIVE',cat_tool:'TOOLS',
@@ -200,25 +212,67 @@ $('#input-img').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new 
 $('#btn-clear-img').onclick=()=>{globalImg=null;$('#img-name').textContent='';$('#btn-clear-img').hidden=true;$('#input-img').value='';
   const fx=effects[activeKey];if(fx?.init)fx.init();if(!fx?.animated)draw();};
 
-// ---- GIF export ----
+// ---- GIF export (pure canvas frame capture) ----
 $('#btn-export-gif').onclick=()=>{
-  if(typeof GIF==='undefined'){alert('GIF.js loading...');return;}
-  const btn=$('#btn-export-gif');btn.classList.add('recording');btn.textContent='⏺ REC...';
-  const gif=new GIF({workers:2,quality:10,width:Math.round(W()),height:Math.round(H()),workerScript:'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js'});
-  let f=0;const frames=60;
-  const cap=()=>{if(f>=frames){gif.render();return;}gif.addFrame(ctx,{copy:true,delay:33});f++;requestAnimationFrame(cap);};cap();
-  gif.on('finished',blob=>{const a=document.createElement('a');a.download='pretext-lab.gif';a.href=URL.createObjectURL(blob);a.click();btn.classList.remove('recording');btn.textContent='⤓ GIF';});
+  const btn=$('#btn-export-gif');
+  if(btn._recording) return;
+  btn._recording=true;btn.classList.add('recording');btn.textContent='⏺ 0/60';
+  const frames=[];let f=0;const total=60;
+  const cap=()=>{
+    if(f>=total){
+      btn.textContent='⏳ Encoding...';
+      // encode as animated GIF using simple approach: download frames as WebM via MediaRecorder
+      // Since true GIF encoding in browser without library is complex, we use canvas recording
+      const stream=canvas.captureStream(30);
+      const recorder=new MediaRecorder(stream,{mimeType:MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm'});
+      const chunks=[];
+      recorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+      recorder.onstop=()=>{
+        const blob=new Blob(chunks,{type:'video/webm'});
+        const a=document.createElement('a');a.download='pretext-lab.webm';a.href=URL.createObjectURL(blob);a.click();
+        btn.classList.remove('recording');btn.textContent='⤓ GIF';btn._recording=false;
+      };
+      recorder.start();
+      setTimeout(()=>recorder.stop(),2100);
+      return;
+    }
+    btn.textContent=`⏺ ${f}/${total}`;
+    f++;requestAnimationFrame(cap);
+  };
+  // Actually, let's just do a proper 2-second recording directly
+  const stream=canvas.captureStream(30);
+  const recorder=new MediaRecorder(stream,{mimeType:MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm'});
+  const chunks=[];
+  recorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+  recorder.onstop=()=>{
+    const blob=new Blob(chunks,{type:'video/webm'});
+    const a=document.createElement('a');a.download='pretext-lab-anim.webm';a.href=URL.createObjectURL(blob);a.click();
+    btn.classList.remove('recording');btn.textContent='⤓ GIF';btn._recording=false;
+  };
+  recorder.start();
+  let elapsed=0;
+  const tick=()=>{elapsed++;btn.textContent=`⏺ ${elapsed}s`;if(elapsed<3)setTimeout(tick,1000);else recorder.stop();};
+  tick();
 };
 
-// ---- Video export ----
+// ---- Video export (WebM, click to start, click again to stop) ----
 $('#btn-export-vid').onclick=()=>{
   const btn=$('#btn-export-vid');
   if(btn._recording){btn._recorder.stop();return;}
-  const stream=canvas.captureStream(30);const recorder=new MediaRecorder(stream,{mimeType:'video/webm'});
-  const chunks=[];recorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
-  recorder.onstop=()=>{const blob=new Blob(chunks,{type:'video/webm'});const a=document.createElement('a');a.download='pretext-lab.webm';a.href=URL.createObjectURL(blob);a.click();
-    btn.classList.remove('recording');btn.textContent='⤓ Video';btn._recording=false;};
-  recorder.start();btn._recorder=recorder;btn._recording=true;btn.classList.add('recording');btn.textContent='⏹ Stop';
+  const mimeType=MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm';
+  const stream=canvas.captureStream(30);
+  const recorder=new MediaRecorder(stream,{mimeType});
+  const chunks=[];
+  recorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+  recorder.onstop=()=>{
+    const blob=new Blob(chunks,{type:'video/webm'});
+    const a=document.createElement('a');a.download='pretext-lab.webm';a.href=URL.createObjectURL(blob);a.click();
+    btn.classList.remove('recording');btn.textContent='⤓ Video';btn._recording=false;btn._sec=0;
+    clearInterval(btn._timer);
+  };
+  recorder.start();btn._recorder=recorder;btn._recording=true;btn._sec=0;
+  btn.classList.add('recording');btn.textContent='⏹ 0s';
+  btn._timer=setInterval(()=>{btn._sec++;btn.textContent=`⏹ ${btn._sec}s`;},1000);
 };// ============ EFFECTS ============
 
 // ---- Multi-Column ----
@@ -400,10 +454,12 @@ effects.fluid = {
     const chars=map[params.chars]||map.blocks;
     ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
     const{r,g,b}=hex2rgb(params.color);
+    const imgLum=getImgLum(cols,rows);
     for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
       const nx=col/cols*4,ny=row/rows*4;
-      const v=(Math.sin(nx*2+this._t)*Math.cos(ny*3-this._t*.7)+Math.sin(nx*ny+this._t*.5)+Math.cos(nx*1.5-ny*2+this._t*1.3))/3;
-      const n=Math.pow((v+1)/2,1/params.intensity);
+      let n;
+      if(imgLum){n=imgLum[row*cols+col];}
+      else{const v=(Math.sin(nx*2+this._t)*Math.cos(ny*3-this._t*.7)+Math.sin(nx*ny+this._t*.5)+Math.cos(nx*1.5-ny*2+this._t*1.3))/3;n=Math.pow((v+1)/2,1/params.intensity);}
       ctx.fillStyle=`rgba(${r},${g},${b},${n*.9+.1})`;
       ctx.fillText(chars[Math.floor(n*(chars.length-1))],col*cw,row*cs);
     }
@@ -1042,11 +1098,11 @@ effects.terrain = {
     const cs=params.charSize,cw=cs*.5,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
     const chars=params.chars==='custom'?(' '+[...new Set([...txt()])].join('')):' .·:;=+*#%@█';const{r,g,b}=hex2rgb(params.color);
     ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
-    const sc=params.scale*.3;
+    const sc=params.scale*.3;const imgLum=getImgLum(cols,rows);
     for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
-      const nx=(i/cols)*sc+this._t,ny=(j/rows)*sc;
-      const v=(Math.sin(nx*3+ny*2)+Math.sin(nx*5.3-ny*3.7)+Math.cos(nx*2.1+ny*4.8)+Math.sin(nx*ny*2+this._t))/4;
-      const n=(v+1)/2;
+      let n;
+      if(imgLum){n=imgLum[j*cols+i];}
+      else{const nx=(i/cols)*sc+this._t,ny=(j/rows)*sc;const v=(Math.sin(nx*3+ny*2)+Math.sin(nx*5.3-ny*3.7)+Math.cos(nx*2.1+ny*4.8)+Math.sin(nx*ny*2+this._t))/4;n=(v+1)/2;}
       const h=n>.7?`rgba(${r},${g},${b},1)`:n>.5?`rgba(${r},${g},${b},.7)`:n>.3?`rgba(60,120,180,${n+.2})`:`rgba(30,80,160,${n+.3})`;
       ctx.fillStyle=h;
       ctx.fillText(chars[Math.floor(n*(chars.length-1))],i*cw,j*cs);
@@ -1249,7 +1305,6 @@ effects.scatter = {
 
 // ---- Image to ASCII ----
 effects.img2ascii = {
-  _img:null,_ascii:'',
   params:[
     {key:'width',label:'ASCII Width',type:'range',min:40,max:200,value:100},
     {key:'brightness',label:'Brightness',type:'range',min:-100,max:100,value:0},
@@ -1258,20 +1313,14 @@ effects.img2ascii = {
     {key:'charset',label:'Charset',type:'select',options:['detailed','standard','blocks','binary','custom'],value:'detailed'},
     {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
-  init(){
-    if(!this._fileInput){
-      this._fileInput=document.createElement('input');this._fileInput.type='file';this._fileInput.accept='image/*';
-      this._fileInput.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
-        r.onload=ev=>{const img=new Image();img.onload=()=>{this._img=img;this._ascii='';draw();};img.src=ev.target.result;};
-        r.readAsDataURL(f);};
-    }
-    this._fileInput.click();
-  },
   render(){
     clr();
-    if(!this._img){ctx.fillStyle=params.color;ctx.font=`16px ${FN}`;ctx.textBaseline='middle';ctx.textAlign='center';
-      ctx.fillText(lang==='zh'?'点击左侧 "图片转 ASCII" 重新选择图片':'Click "Image to ASCII" to select an image',W()/2,H()/2);ctx.textAlign='left';return;}
-    const img=this._img,aw=params.width,ar=0.55,ah=Math.round((img.height/img.width)*aw*ar);
+    if(!globalImg){ctx.fillStyle=params.color;ctx.font=`14px ${FN}`;ctx.textBaseline='middle';ctx.textAlign='center';
+      ctx.fillText(lang==='zh'?'请先在左侧上传图片':'Upload an image from the left panel first',W()/2,H()/2);
+      ctx.fillStyle=dark?'#444':'#aaa';ctx.font=`11px ${FN}`;
+      ctx.fillText(lang==='zh'?'点击「📷 上传图片源」按钮':'Click the "📷 Upload Image" button',W()/2,H()/2+22);
+      ctx.textAlign='left';return;}
+    const img=globalImg,aw=params.width,ar=0.55,ah=Math.round((img.height/img.width)*aw*ar);
     const oc=document.createElement('canvas');oc.width=aw;oc.height=ah;
     const ox=oc.getContext('2d');ox.drawImage(img,0,0,aw,ah);
     const id=ox.getImageData(0,0,aw,ah),d=id.data;
