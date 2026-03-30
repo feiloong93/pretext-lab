@@ -4,6 +4,7 @@ const $ = s => document.querySelector(s);
 const canvas = $('#canvas'), ctx = canvas.getContext('2d');
 const dpr = window.devicePixelRatio || 1;
 let dark = true, lang = 'en', params = {}, activeKey = '', raf = null;
+let globalImg = null;
 
 // ---- HiDPI canvas ----
 function W(){ return canvas.width/dpr; }
@@ -39,27 +40,50 @@ const FN = 'IBMPlex, sans-serif';
 
 // ---- i18n ----
 const i18n = {
-  en:{params:'PARAMETERS',cat_layout:'LAYOUT',cat_ascii:'ASCII ART',cat_fx:'INTERACTIVE',cat_style:'STYLE',cat_tool:'TOOLS',
+  en:{params:'PARAMETERS',postfx:'POST-PROCESSING',cat_layout:'LAYOUT',cat_ascii:'ASCII ART',cat_fx:'INTERACTIVE',cat_tool:'TOOLS',
+    upload_img:'📷 Upload Image',
     multicolumn:'Multi-Column',textwrap:'Text Wrap',shrinkwrap:'Shrinkwrap',accordion:'Accordion',richtext:'Rich Text',
     fluid:'Fluid Smoke',torus:'Wireframe Torus',particles:'Char Particles',matrix:'Matrix Rain',
     globe:'ASCII Globe',plasma:'Plasma',starfield:'Starfield',spiral:'Spiral',textshape:'Text Shape',
     tunnel:'ASCII Tunnel',mandelbrot:'Mandelbrot',life:'Game of Life',clock:'ASCII Clock',
     ripple:'Char Ripple',lorenz:'Lorenz Attractor',cube:'Rotating Cube',terrain:'Terrain',dna:'DNA Helix',blackhole:'Black Hole',
     wave:'Text Wave',typewriter:'Typewriter',gravity:'Gravity Text',morph:'Glitch Morph',
-    img2ascii:'Image to ASCII',orbit:'Text Orbit',helix:'Text Helix',scatter:'Scatter Type'},
-  zh:{params:'参数调节',cat_layout:'排版布局',cat_ascii:'ASCII 艺术',cat_fx:'交互动效',cat_style:'文字样式',cat_tool:'工具',
+    img2ascii:'Image to ASCII',orbit:'Text Orbit',helix:'Text Helix',scatter:'Scatter Type',
+    p_charSize:'Char Size',p_fontSize:'Font Size',p_speed:'Speed',p_color:'Color',p_chars:'Characters',
+    p_count:'Count',p_size:'Size',p_intensity:'Intensity',p_scale:'Scale',p_density:'Density',
+    p_arms:'Arms',p_rings:'Rings',p_trail:'Trail',p_pull:'Pull',p_length:'Length',p_strands:'Strands',
+    p_spread:'Spread',p_radius:'Radius',p_tilt:'Tilt',p_amp:'Amplitude',p_freq:'Frequency',
+    p_grav:'Gravity',p_chaos:'Chaos',p_glitch:'Glitch',p_maxW:'Max Width',p_lineHeight:'Line Height',
+    p_cols:'Columns',p_gap:'Gap',p_n:'Sections',p_maxIter:'Iterations',p_waves:'Waves',
+    p_shape:'Shape',p_ox:'Object X',p_oy:'Object Y',p_os:'Object Size',
+    p_width:'Width',p_brightness:'Brightness',p_contrast:'Contrast',p_invert:'Invert',p_charset:'Charset',
+    p_R:'Major R',p_r:'Minor R',p_code:'Code Color',p_tag:'Tag Color',
+    pp_brightness:'Brightness',pp_contrast:'Contrast',pp_saturate:'Saturation',pp_blur:'Blur',
+    pp_hue:'Hue Shift',pp_opacity:'Opacity',pp_noise:'Noise',pp_invert:'Invert'},
+  zh:{params:'参数调节',postfx:'后处理',cat_layout:'排版布局',cat_ascii:'ASCII 艺术',cat_fx:'交互动效',cat_tool:'工具',
+    upload_img:'📷 上传图片源',
     multicolumn:'多栏文字流',textwrap:'文字环绕',shrinkwrap:'收缩包裹',accordion:'手风琴',richtext:'富文本混排',
     fluid:'流体烟雾',torus:'线框甜甜圈',particles:'字符粒子',matrix:'矩阵雨',
     globe:'ASCII 地球',plasma:'等离子体',starfield:'星空穿越',spiral:'螺旋漩涡',textshape:'字形画',
     tunnel:'ASCII 隧道',mandelbrot:'曼德博分形',life:'生命游戏',clock:'ASCII 时钟',
     ripple:'字符涟漪',lorenz:'洛伦兹吸引子',cube:'旋转立方体',terrain:'地形生成',dna:'DNA 双螺旋',blackhole:'黑洞',
     wave:'文字波浪',typewriter:'打字机',gravity:'重力文字',morph:'故障变形',
-    img2ascii:'图片转 ASCII',orbit:'文字轨道',helix:'文字螺旋',scatter:'散射文字'}
+    img2ascii:'图片转 ASCII',orbit:'文字轨道',helix:'文字螺旋',scatter:'散射文字',
+    p_charSize:'字符大小',p_fontSize:'字号',p_speed:'速度',p_color:'颜色',p_chars:'字符集',
+    p_count:'数量',p_size:'尺寸',p_intensity:'强度',p_scale:'缩放',p_density:'密度',
+    p_arms:'旋臂',p_rings:'环数',p_trail:'轨迹长度',p_pull:'引力',p_length:'长度',p_strands:'股数',
+    p_spread:'扩散',p_radius:'半径',p_tilt:'倾斜',p_amp:'振幅',p_freq:'频率',
+    p_grav:'重力',p_chaos:'混乱度',p_glitch:'故障强度',p_maxW:'最大宽度',p_lineHeight:'行高',
+    p_cols:'列数',p_gap:'间距',p_n:'分区数',p_maxIter:'迭代次数',p_waves:'波数',
+    p_shape:'形状',p_ox:'物体 X',p_oy:'物体 Y',p_os:'物体尺寸',
+    p_width:'宽度',p_brightness:'亮度',p_contrast:'对比度',p_invert:'反色',p_charset:'字符集',
+    p_R:'主半径',p_r:'副半径',p_code:'代码色',p_tag:'标签色',
+    pp_brightness:'亮度',pp_contrast:'对比度',pp_saturate:'饱和度',pp_blur:'模糊',
+    pp_hue:'色相偏移',pp_opacity:'不透明度',pp_noise:'噪点',pp_invert:'反色'}
 };
 function t(k){ return(i18n[lang]||i18n.en)[k]||k; }
-function applyI18n(){ document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);}); $('#btn-lang').textContent=lang==='en'?'中文':'EN'; buildSidebar(); }
+function applyI18n(){ document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);}); $('#btn-lang').textContent=lang==='en'?'中文':'EN'; buildSidebar(); buildPostPanel(); }
 
-// ---- Effects registry ----
 const effects = {};
 const cats = [
   {key:'cat_tool',items:['img2ascii']},
@@ -89,25 +113,67 @@ function buildSidebar(){
   });
 }
 
-// ---- Panel ----
+// ---- Panel (effect params with i18n labels) ----
 function buildPanel(defs){
   const body=$('#panel-body'); body.innerHTML=''; params={};
   (defs||[]).forEach(d=>{
     params[d.key]=d.value;
+    const label=t('p_'+d.key)||d.label||d.key;
     const g=document.createElement('div'); g.className='pg';
     if(d.type==='range'){
-      g.innerHTML=`<div class="pg-head"><span>${d.label}</span><span class="pg-val" id="v-${d.key}">${d.value}</span></div><input type="range" min="${d.min}" max="${d.max}" step="${d.step||1}" value="${d.value}">`;
+      g.innerHTML=`<div class="pg-head"><span>${label}</span><span class="pg-val" id="v-${d.key}">${d.value}</span></div><input type="range" min="${d.min}" max="${d.max}" step="${d.step||1}" value="${d.value}">`;
       g.querySelector('input').oninput=e=>{params[d.key]=+e.target.value;$(`#v-${d.key}`).textContent=d.step&&d.step<1?(+e.target.value).toFixed(1):+e.target.value;if(!effects[activeKey]?.animated)draw();};
     }else if(d.type==='select'){
-      g.innerHTML=`<div class="pg-head"><span>${d.label}</span></div><select>${d.options.map(o=>`<option${o===d.value?' selected':''}>${o}</option>`).join('')}</select>`;
+      g.innerHTML=`<div class="pg-head"><span>${label}</span></div><select>${d.options.map(o=>`<option${o===d.value?' selected':''}>${o}</option>`).join('')}</select>`;
       g.querySelector('select').onchange=e=>{params[d.key]=e.target.value;if(!effects[activeKey]?.animated)draw();};
     }else if(d.type==='color'){
-      g.innerHTML=`<div class="pg-head"><span>${d.label}</span><span class="pg-val" id="v-${d.key}">${d.value}</span></div><input type="color" value="${d.value}">`;
+      g.innerHTML=`<div class="pg-head"><span>${label}</span><span class="pg-val" id="v-${d.key}">${d.value}</span></div><input type="color" value="${d.value}">`;
       g.querySelector('input').oninput=e=>{params[d.key]=e.target.value;$(`#v-${d.key}`).textContent=e.target.value;if(!effects[activeKey]?.animated)draw();};
     }
     body.appendChild(g);
   });
 }
+
+// ---- Post-processing ----
+const post = {brightness:0,contrast:0,saturate:0,blur:0,hue:0,opacity:100,noise:0,invert:false};
+const postDefs = [
+  {key:'brightness',min:-100,max:100,value:0,step:1},
+  {key:'contrast',min:-100,max:100,value:0,step:1},
+  {key:'saturate',min:-100,max:100,value:0,step:1},
+  {key:'blur',min:0,max:10,value:0,step:0.5},
+  {key:'hue',min:0,max:360,value:0,step:1},
+  {key:'opacity',min:10,max:100,value:100,step:1},
+  {key:'noise',min:0,max:50,value:0,step:1},
+];
+function buildPostPanel(){
+  const body=$('#panel-post'); body.innerHTML='';
+  postDefs.forEach(d=>{
+    const label=t('pp_'+d.key);
+    const g=document.createElement('div'); g.className='pg';
+    g.innerHTML=`<div class="pg-head"><span>${label}</span><span class="pg-val" id="vp-${d.key}">${d.value}</span></div><input type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${d.value}">`;
+    g.querySelector('input').oninput=e=>{post[d.key]=+e.target.value;$(`#vp-${d.key}`).textContent=d.step<1?(+e.target.value).toFixed(1):+e.target.value;applyPost();};
+    body.appendChild(g);
+  });
+  const g=document.createElement('div'); g.className='pg';
+  g.innerHTML=`<div class="pg-head"><span>${t('pp_invert')}</span></div><label style="color:var(--dim);font-size:11px;cursor:pointer"><input type="checkbox" id="post-invert" style="margin-right:4px">${lang==='zh'?'启用':'Enable'}</label>`;
+  g.querySelector('input').onchange=e=>{post.invert=e.target.checked;applyPost();};
+  body.appendChild(g);
+}
+function applyPost(){
+  const f=[];
+  if(post.brightness!==0) f.push(`brightness(${1+post.brightness/100})`);
+  if(post.contrast!==0) f.push(`contrast(${1+post.contrast/100})`);
+  if(post.saturate!==0) f.push(`saturate(${1+post.saturate/100})`);
+  if(post.blur>0) f.push(`blur(${post.blur}px)`);
+  if(post.hue!==0) f.push(`hue-rotate(${post.hue}deg)`);
+  if(post.opacity<100) f.push(`opacity(${post.opacity/100})`);
+  if(post.invert) f.push('invert(1)');
+  canvas.style.filter=f.length?f.join(' '):'none';
+}
+
+// ---- Panel collapse ----
+$('#toggle-fx').onclick=()=>{$('#panel-body').classList.toggle('collapsed');const a=$('#toggle-fx .sb-arrow');a.textContent=a.textContent==='▾'?'▸':'▾';};
+$('#toggle-post').onclick=()=>{$('#panel-post').classList.toggle('collapsed');const a=$('#toggle-post .sb-arrow');a.textContent=a.textContent==='▾'?'▸':'▾';};
 
 // ---- Activate ----
 function activate(key){
@@ -120,14 +186,40 @@ function activate(key){
 }
 function draw(){ const fx=effects[activeKey]; if(fx&&!fx.animated)fx.render(); }
 
-// ---- Topbar ----
+// ---- Topbar & events ----
 $('#btn-bg').onclick=()=>{dark=!dark;document.body.classList.toggle('light',!dark);$('#btn-bg').textContent=dark?'◐':'◑';draw();};
-$('#btn-lang').onclick=()=>{lang=lang==='en'?'zh':'en';applyI18n();};
-$('#btn-export').onclick=()=>{const a=document.createElement('a');a.download='pretext-lab.png';a.href=canvas.toDataURL('image/png');a.click();};
-$('#btn-css').onclick=()=>{const css=effects[activeKey]?.css?.()||'/* No CSS for this effect */';navigator.clipboard.writeText(css).then(()=>alert('CSS copied!'));};
+$('#btn-lang').onclick=()=>{lang=lang==='en'?'zh':'en';applyI18n();buildPanel(effects[activeKey]?.params);};
+$('#btn-export-png').onclick=()=>{const fs=canvas.style.filter;canvas.style.filter='none';requestAnimationFrame(()=>{const a=document.createElement('a');a.download='pretext-lab.png';a.href=canvas.toDataURL('image/png');a.click();canvas.style.filter=fs;});};
+$('#btn-css').onclick=()=>{const css=effects[activeKey]?.css?.()||'/* No CSS */';navigator.clipboard.writeText(css).then(()=>alert('CSS copied!'));};
 $('#input-text').oninput=()=>{const fx=effects[activeKey];if(fx?.init)fx.init();if(!fx?.animated)draw();};
 
-// ============ EFFECTS ============
+// ---- Image upload ----
+$('#input-img').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=ev=>{const img=new Image();img.onload=()=>{globalImg=img;$('#img-name').textContent=f.name;$('#btn-clear-img').hidden=false;
+    const fx=effects[activeKey];if(fx?.init)fx.init();if(!fx?.animated)draw();};img.src=ev.target.result;};r.readAsDataURL(f);};
+$('#btn-clear-img').onclick=()=>{globalImg=null;$('#img-name').textContent='';$('#btn-clear-img').hidden=true;$('#input-img').value='';
+  const fx=effects[activeKey];if(fx?.init)fx.init();if(!fx?.animated)draw();};
+
+// ---- GIF export ----
+$('#btn-export-gif').onclick=()=>{
+  if(typeof GIF==='undefined'){alert('GIF.js loading...');return;}
+  const btn=$('#btn-export-gif');btn.classList.add('recording');btn.textContent='⏺ REC...';
+  const gif=new GIF({workers:2,quality:10,width:Math.round(W()),height:Math.round(H()),workerScript:'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js'});
+  let f=0;const frames=60;
+  const cap=()=>{if(f>=frames){gif.render();return;}gif.addFrame(ctx,{copy:true,delay:33});f++;requestAnimationFrame(cap);};cap();
+  gif.on('finished',blob=>{const a=document.createElement('a');a.download='pretext-lab.gif';a.href=URL.createObjectURL(blob);a.click();btn.classList.remove('recording');btn.textContent='⤓ GIF';});
+};
+
+// ---- Video export ----
+$('#btn-export-vid').onclick=()=>{
+  const btn=$('#btn-export-vid');
+  if(btn._recording){btn._recorder.stop();return;}
+  const stream=canvas.captureStream(30);const recorder=new MediaRecorder(stream,{mimeType:'video/webm'});
+  const chunks=[];recorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+  recorder.onstop=()=>{const blob=new Blob(chunks,{type:'video/webm'});const a=document.createElement('a');a.download='pretext-lab.webm';a.href=URL.createObjectURL(blob);a.click();
+    btn.classList.remove('recording');btn.textContent='⤓ Video';btn._recording=false;};
+  recorder.start();btn._recorder=recorder;btn._recording=true;btn.classList.add('recording');btn.textContent='⏹ Stop';
+};// ============ EFFECTS ============
 
 // ---- Multi-Column ----
 effects.multicolumn = {
@@ -1207,5 +1299,8 @@ buildSidebar();
 buildPanel(effects.wave.params);
 applyI18n();
 activate('wave');
+
+
+buildPostPanel();
 
 })();
