@@ -41,11 +41,17 @@ const i18n = {
   en:{params:'PARAMETERS',cat_layout:'LAYOUT',cat_ascii:'ASCII ART',cat_fx:'INTERACTIVE',cat_style:'STYLE',cat_tool:'TOOLS',
     multicolumn:'Multi-Column',textwrap:'Text Wrap',shrinkwrap:'Shrinkwrap',accordion:'Accordion',richtext:'Rich Text',
     fluid:'Fluid Smoke',torus:'Wireframe Torus',particles:'Char Particles',matrix:'Matrix Rain',
+    globe:'ASCII Globe',plasma:'Plasma',starfield:'Starfield',fire:'Fire',spiral:'Spiral',textshape:'Text Shape',
+    tunnel:'ASCII Tunnel',mandelbrot:'Mandelbrot',life:'Game of Life',clock:'ASCII Clock',
+    ripple:'Char Ripple',lorenz:'Lorenz Attractor',cube:'Rotating Cube',terrain:'Terrain',dna:'DNA Helix',blackhole:'Black Hole',
     wave:'Text Wave',typewriter:'Typewriter',gravity:'Gravity Text',morph:'Glitch Morph',
     neon:'Neon Glow',gradient:'Gradient Text',heightpredict:'Height Predict',virtuallist:'Virtual List'},
   zh:{params:'参数调节',cat_layout:'排版布局',cat_ascii:'ASCII 艺术',cat_fx:'交互动效',cat_style:'文字样式',cat_tool:'工具',
     multicolumn:'多栏文字流',textwrap:'文字环绕',shrinkwrap:'收缩包裹',accordion:'手风琴',richtext:'富文本混排',
     fluid:'流体烟雾',torus:'线框甜甜圈',particles:'字符粒子',matrix:'矩阵雨',
+    globe:'ASCII 地球',plasma:'等离子体',starfield:'星空穿越',fire:'火焰',spiral:'螺旋漩涡',textshape:'字形画',
+    tunnel:'ASCII 隧道',mandelbrot:'曼德博分形',life:'生命游戏',clock:'ASCII 时钟',
+    ripple:'字符涟漪',lorenz:'洛伦兹吸引子',cube:'旋转立方体',terrain:'地形生成',dna:'DNA 双螺旋',blackhole:'黑洞',
     wave:'文字波浪',typewriter:'打字机',gravity:'重力文字',morph:'故障变形',
     neon:'霓虹发光',gradient:'渐变文字',heightpredict:'高度预测',virtuallist:'虚拟列表'}
 };
@@ -56,7 +62,7 @@ function applyI18n(){ document.querySelectorAll('[data-i18n]').forEach(el=>{el.t
 const effects = {};
 const cats = [
   {key:'cat_layout',items:['multicolumn','textwrap','shrinkwrap','accordion','richtext']},
-  {key:'cat_ascii',items:['fluid','torus','particles','matrix']},
+  {key:'cat_ascii',items:['fluid','torus','particles','matrix','globe','plasma','starfield','fire','spiral','textshape','tunnel','mandelbrot','life','clock','ripple','lorenz','cube','terrain','dna','blackhole']},
   {key:'cat_fx',items:['wave','typewriter','gravity','morph']},
   {key:'cat_style',items:['neon','gradient']},
   {key:'cat_tool',items:['heightpredict','virtuallist']},
@@ -564,6 +570,517 @@ effects.virtuallist = {
     ctx.restore();
     ctx.fillStyle=dark?'#555':'#999';ctx.font='10px monospace';ctx.textBaseline='top';
     ctx.fillText(`Total: ${params.items} | Visible: ${rendered} | Scroll: ${Math.round(this._sy)}px`,x0,y0+viewH+6);
+  }
+};
+
+// ---- ASCII Globe ----
+effects.globe = {
+  _t:0,animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:5,max:16,value:8},
+    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:4},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.008;
+    const cs=params.charSize,cw=cs*.6,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
+    const cx=cols/2,cy=rows/2,R=Math.min(cx,cy)*.75;
+    const chars='.,-~:;=!*#$@';
+    ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
+    const{r,g,b}=hex2rgb(params.color);
+    for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+      const x=(i-cx)/R,y=(j-cy)/(R*.5);
+      if(x*x+y*y>1)continue;
+      const z=Math.sqrt(1-x*x-y*y);
+      const lon=Math.atan2(x,z)+this._t,lat=Math.asin(y);
+      const u=lon*2,v=lat*3;
+      const land=(Math.sin(u*3+v*2)+Math.sin(u*5-v*3)+Math.cos(u*2+v*5))*.33;
+      const n=(z*.6+.4)*((land+1)/2);
+      ctx.fillStyle=`rgba(${r},${g},${b},${n*.85+.15})`;
+      ctx.fillText(chars[Math.floor(Math.max(0,Math.min(1,n))*(chars.length-1))],i*cw,j*cs);
+    }
+  }
+};
+
+// ---- Plasma ----
+effects.plasma = {
+  _t:0,animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:5,max:18,value:9},
+    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:6},
+    {key:'scale',label:'Scale',type:'range',min:1,max:20,value:8},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.012;
+    const cs=params.charSize,cw=cs*.6,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
+    const chars=' .:;+=xX$&#@';const sc=params.scale*.5;
+    ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
+    const{r,g,b}=hex2rgb(params.color);
+    for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+      const x=i/cols*sc,y=j/rows*sc,t=this._t;
+      const v=(Math.sin(x*3+t)+Math.sin(y*4-t*.7)+Math.sin((x+y)*2+t*1.3)+Math.sin(Math.sqrt(x*x+y*y)*4-t))/4;
+      const n=(v+1)/2;
+      const hue=(n*360+this._t*30)%360;
+      ctx.fillStyle=`hsla(${hue},70%,55%,${n*.7+.3})`;
+      ctx.fillText(chars[Math.floor(n*(chars.length-1))],i*cw,j*cs);
+    }
+  }
+};
+
+
+// ---- Starfield ----
+effects.starfield = {
+  _stars:[],_ok:false,animated:true,
+  params:[
+    {key:'count',label:'Stars',type:'range',min:50,max:500,value:200},
+    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:6},
+    {key:'charSize',label:'Char Size',type:'range',min:6,max:18,value:10},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  init(){this._ok=false;},
+  render(){
+    clr();const cx=W()/2,cy=H()/2;
+    if(!this._ok||this._stars.length!==params.count){
+      this._stars=Array.from({length:params.count},()=>({x:(Math.random()-.5)*W()*2,y:(Math.random()-.5)*H()*2,z:Math.random()*1000}));this._ok=true;}
+    const chars='.+*#@';const{r,g,b}=hex2rgb(params.color);
+    ctx.font=`${params.charSize}px monospace`;ctx.textBaseline='middle';ctx.textAlign='center';
+    this._stars.forEach(s=>{s.z-=params.speed*2;if(s.z<=1){s.z=1000;s.x=(Math.random()-.5)*W()*2;s.y=(Math.random()-.5)*H()*2;}
+      const sx=cx+s.x/s.z*200,sy=cy+s.y/s.z*200,br=1-s.z/1000;
+      if(sx>0&&sx<W()&&sy>0&&sy<H()){ctx.fillStyle=`rgba(${r},${g},${b},${br})`;
+        ctx.fillText(chars[Math.floor(br*(chars.length-1))],sx,sy);}});
+    ctx.textAlign='left';
+  }
+};
+
+
+// ---- Fire ----
+effects.fire = {
+  _buf:null,animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:6},
+    {key:'intensity',label:'Intensity',type:'range',min:1,max:10,value:6},
+    {key:'wind',label:'Wind',type:'range',min:-5,max:5,value:0},
+    {key:'color',label:'Color',type:'color',value:'#ff6622'},
+  ],
+  init(){this._buf=null;},
+  render(){
+    clr();const cs=params.charSize,cw=cs*.6,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
+    if(!this._buf||this._buf.length!==cols*rows)this._buf=new Float32Array(cols*rows);
+    const buf=this._buf;
+    for(let i=0;i<cols;i++)buf[(rows-1)*cols+i]=Math.random()*params.intensity/5;
+    for(let j=rows-2;j>=0;j--)for(let i=0;i<cols;i++){
+      const w=params.wind>0?Math.min(cols-1,i+1):Math.max(0,i-1);
+      const avg=(buf[(j+1)*cols+Math.max(0,i-1)]+buf[(j+1)*cols+i]+buf[(j+1)*cols+Math.min(cols-1,i+1)]+buf[(j+1)*cols+w])/4;
+      buf[j*cols+i]=Math.max(0,avg-0.004-Math.random()*.008);
+    }
+    const chars=' .:-=+*#%@';
+    ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
+    for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+      const v=Math.min(1,buf[j*cols+i]);if(v<.02)continue;
+      const hue=v*60;
+      ctx.fillStyle=`hsla(${hue},100%,${v*60+10}%,${v})`;
+      ctx.fillText(chars[Math.floor(v*(chars.length-1))],i*cw,j*cs);
+    }
+  }
+};
+
+
+// ---- Spiral ----
+effects.spiral = {
+  _t:0,animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:5,max:16,value:8},
+    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:5},
+    {key:'arms',label:'Arms',type:'range',min:1,max:8,value:3},
+    {key:'density',label:'Density',type:'range',min:50,max:500,value:200},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.015;
+    const cx=W()/2,cy=H()/2,maxR=Math.min(cx,cy)*.85;
+    const chars='.+*#@$';const{r,g,b}=hex2rgb(params.color);
+    ctx.font=`${params.charSize}px monospace`;ctx.textBaseline='middle';ctx.textAlign='center';
+    for(let a=0;a<params.arms;a++){const off=a/params.arms*Math.PI*2;
+      for(let i=0;i<params.density;i++){const t=i/params.density;
+        const angle=t*Math.PI*6+off+this._t;const rad=t*maxR;
+        const x=cx+Math.cos(angle)*rad,y=cy+Math.sin(angle)*rad;
+        const br=t*.7+.3;
+        ctx.fillStyle=`rgba(${r},${g},${b},${br})`;
+        ctx.fillText(chars[Math.floor(br*(chars.length-1))],x,y);}}
+    ctx.textAlign='left';
+  }
+};
+
+
+// ---- Text Shape ----
+effects.textshape = {
+  _pts:null,
+  params:[
+    {key:'fontSize',label:'Shape Font',type:'range',min:60,max:300,value:150},
+    {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:7},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  init(){this._pts=null;},
+  render(){
+    clr();const text=txt().slice(0,6)||'A';
+    if(!this._pts){
+      const fs=params.fontSize;
+      ctx.font=`900 ${fs}px ${FN}`;ctx.textBaseline='middle';ctx.textAlign='center';
+      ctx.fillStyle='#fff';ctx.fillText(text,W()/2,H()/2);
+      const id=ctx.getImageData(0,0,W()*dpr,H()*dpr);
+      this._pts=[];const step=Math.max(2,Math.floor(params.charSize*.8));
+      for(let y=0;y<id.height;y+=step)for(let x=0;x<id.width;x+=step){
+        if(id.data[(y*id.width+x)*4+3]>128)this._pts.push({x:x/dpr,y:y/dpr});}
+      clr();
+    }
+    const fill=[...new Set([...txt()])].join('')||'PRETEXT';
+    const cs=params.charSize;
+    ctx.font=`${cs}px monospace`;ctx.textBaseline='top';ctx.fillStyle=params.color;
+    let ci=0;
+    this._pts.forEach(p=>{ctx.fillText(fill[ci%fill.length],p.x,p.y);ci++;});
+  }
+};
+
+
+// ---- ASCII Tunnel ----
+effects.tunnel = {
+  _t:0,animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:5,max:16,value:8},
+    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:6},
+    {key:'rings',label:'Rings',type:'range',min:5,max:30,value:15},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.02;
+    const cx=W()/2,cy=H()/2,maxR=Math.min(cx,cy);
+    const chars=' .:-=+*#%@';const{r,g,b}=hex2rgb(params.color);
+    ctx.font=`${params.charSize}px monospace`;ctx.textBaseline='middle';ctx.textAlign='center';
+    for(let ring=params.rings;ring>=1;ring--){
+      const t=(ring/params.rings+this._t*.1)%1;
+      const rad=t*maxR;const segs=Math.floor(12+ring*3);
+      const br=1-t;
+      for(let s=0;s<segs;s++){const a=s/segs*Math.PI*2;
+        const x=cx+Math.cos(a)*rad,y=cy+Math.sin(a)*rad*.7;
+        ctx.fillStyle=`rgba(${r},${g},${b},${br})`;
+        ctx.fillText(chars[Math.floor(br*(chars.length-1))],x,y);}}
+    ctx.textAlign='left';
+  }
+};
+
+
+// ---- Mandelbrot ----
+effects.mandelbrot = {
+  _t:0,animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:7},
+    {key:'speed',label:'Zoom Speed',type:'range',min:1,max:10,value:3},
+    {key:'maxIter',label:'Iterations',type:'range',min:20,max:200,value:60},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.003;
+    const cs=params.charSize,cw=cs*.5,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
+    const chars=' .`-~:;=+*#%@$';
+    const zoom=2+Math.sin(this._t)*.8;
+    const ox=-0.745,oy=0.186;
+    ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
+    const{r,g,b}=hex2rgb(params.color);
+    for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+      let cr=ox+(i-cols/2)/(cols/2)*zoom,ci=oy+(j-rows/2)/(rows/2)*zoom*.6;
+      let zr=0,zi=0,n=0;
+      while(zr*zr+zi*zi<4&&n<params.maxIter){const t=zr*zr-zi*zi+cr;zi=2*zr*zi+ci;zr=t;n++;}
+      if(n>=params.maxIter)continue;
+      const v=n/params.maxIter;
+      ctx.fillStyle=`rgba(${r},${g},${b},${v*.9+.1})`;
+      ctx.fillText(chars[Math.floor(v*(chars.length-1))],i*cw,j*cs);
+    }
+  }
+};
+
+
+// ---- Game of Life ----
+effects.life = {
+  _grid:null,_cols:0,_rows:0,animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:7},
+    {key:'speed',label:'Speed',type:'range',min:1,max:10,value:4},
+    {key:'density',label:'Init Density',type:'range',min:1,max:9,value:4},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  _fc:0,
+  init(){this._grid=null;this._fc=0;},
+  render(){
+    clr();const cs=params.charSize,cw=cs*.6,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
+    if(!this._grid||this._cols!==cols||this._rows!==rows){
+      this._cols=cols;this._rows=rows;
+      this._grid=new Uint8Array(cols*rows);
+      for(let i=0;i<cols*rows;i++)this._grid[i]=Math.random()<params.density*.1?1:0;
+    }
+    this._fc++;
+    if(this._fc%Math.max(1,11-params.speed)===0){
+      const next=new Uint8Array(cols*rows);
+      for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+        let nb=0;
+        for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){
+          if(!di&&!dj)continue;
+          const ni=(i+di+cols)%cols,nj=(j+dj+rows)%rows;
+          nb+=this._grid[nj*cols+ni];}
+        const alive=this._grid[j*cols+i];
+        next[j*cols+i]=(alive&&(nb===2||nb===3))||(!alive&&nb===3)?1:0;
+      }
+      this._grid=next;
+    }
+    const chars=txt()||'█';const{r,g,b}=hex2rgb(params.color);
+    ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
+    for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+      if(this._grid[j*cols+i]){ctx.fillStyle=`rgb(${r},${g},${b})`;
+        ctx.fillText(chars[(i+j)%chars.length],i*cw,j*cs);}
+    }
+  }
+};
+
+
+// ---- ASCII Clock ----
+effects.clock = {
+  animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:4,max:12,value:6},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  render(){
+    clr();const cs=params.charSize,cw=cs*.6,cx=W()/2,cy=H()/2,R=Math.min(cx,cy)*.7;
+    const now=new Date(),h=now.getHours()%12,m=now.getMinutes(),s=now.getSeconds(),ms=now.getMilliseconds();
+    const chars='·•○●';const{r,g,b}=hex2rgb(params.color);
+    ctx.font=`${cs}px monospace`;ctx.textBaseline='middle';ctx.textAlign='center';
+    // dial
+    for(let i=0;i<60;i++){const a=(i/60)*Math.PI*2-Math.PI/2;
+      const rr=i%5===0?R:R*.95;const ch=i%5===0?'●':'·';
+      ctx.fillStyle=`rgba(${r},${g},${b},${i%5===0?1:.4})`;
+      ctx.fillText(ch,cx+Math.cos(a)*rr,cy+Math.sin(a)*rr);}
+    // numbers
+    ctx.font=`bold ${cs*2}px ${FN}`;ctx.fillStyle=params.color;
+    for(let i=1;i<=12;i++){const a=(i/12)*Math.PI*2-Math.PI/2;
+      ctx.fillText(i.toString(),cx+Math.cos(a)*R*.82,cy+Math.sin(a)*R*.82);}
+    // hands
+    const drawHand=(angle,len,ch,alpha)=>{const steps=Math.floor(len/cs);
+      for(let j=0;j<steps;j++){const t=j/steps;
+        ctx.fillStyle=`rgba(${r},${g},${b},${alpha})`;
+        ctx.fillText(ch,cx+Math.cos(angle)*len*t,cy+Math.sin(angle)*len*t);}};
+    const sa=(s+ms/1000)/60*Math.PI*2-Math.PI/2;
+    const ma=(m+s/60)/60*Math.PI*2-Math.PI/2;
+    const ha=(h+(m/60))/12*Math.PI*2-Math.PI/2;
+    drawHand(ha,R*.5,'█',1);
+    drawHand(ma,R*.65,'▓',.9);
+    drawHand(sa,R*.8,'·',.6);
+    ctx.fillStyle=params.color;ctx.fillText('●',cx,cy);
+    ctx.textAlign='left';
+  }
+};
+
+
+// ---- Char Ripple ----
+effects.ripple = {
+  _t:0,animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:5,max:16,value:8},
+    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:5},
+    {key:'waves',label:'Waves',type:'range',min:1,max:10,value:3},
+    {key:'amp',label:'Amplitude',type:'range',min:1,max:20,value:8},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.02;
+    const cs=params.charSize,cw=cs*.6,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
+    const cx=cols/2,cy=rows/2;
+    const chars=' ~≈∽∿≋';const{r,g,b}=hex2rgb(params.color);
+    ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
+    for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+      const dx=i-cx,dy=(j-cy)*2;const dist=Math.sqrt(dx*dx+dy*dy);
+      const v=(Math.sin(dist*.3-this._t*2)+Math.sin(dist*.5-this._t*1.5+1))/2;
+      const n=(v+1)/2;
+      const yOff=Math.sin(dist*.4-this._t*2)*params.amp*.1;
+      ctx.fillStyle=`rgba(${r},${g},${b},${n*.8+.1})`;
+      ctx.fillText(chars[Math.floor(n*(chars.length-1))],i*cw,j*cs+yOff);
+    }
+  }
+};
+
+
+// ---- Lorenz Attractor ----
+effects.lorenz = {
+  _pts:[],_ok:false,animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:6},
+    {key:'speed',label:'Speed',type:'range',min:1,max:10,value:4},
+    {key:'trail',label:'Trail',type:'range',min:100,max:3000,value:800},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  init(){this._pts=[];this._ok=false;this._x=0.1;this._y=0;this._z=0;},
+  render(){
+    clr();const dt=0.005*params.speed,sigma=10,rho=28,beta=8/3;
+    for(let i=0;i<8;i++){
+      const dx=sigma*(this._y-this._x)*dt;
+      const dy=(this._x*(rho-this._z)-this._y)*dt;
+      const dz=(this._x*this._y-beta*this._z)*dt;
+      this._x+=dx;this._y+=dy;this._z+=dz;
+      this._pts.push({x:this._x,y:this._y,z:this._z});
+    }
+    while(this._pts.length>params.trail)this._pts.shift();
+    const chars='.·:+*#@';const{r,g,b}=hex2rgb(params.color);
+    ctx.font=`${params.charSize}px monospace`;ctx.textBaseline='middle';ctx.textAlign='center';
+    const cx=W()/2,cy=H()/2,sc=Math.min(W(),H())/60;
+    this._pts.forEach((p,i)=>{const t=i/this._pts.length;
+      ctx.fillStyle=`rgba(${r},${g},${b},${t})`;
+      ctx.fillText(chars[Math.floor(t*(chars.length-1))],cx+p.x*sc,cy+(p.z-25)*sc);});
+    ctx.textAlign='left';
+  }
+};
+
+
+// ---- Rotating Cube ----
+effects.cube = {
+  _t:0,animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:7},
+    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:4},
+    {key:'size',label:'Size',type:'range',min:30,max:200,value:80},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.01;
+    const cs=params.charSize,cw=cs*.5,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
+    const zb=new Float32Array(cols*rows).fill(-1e9);
+    const sb=new Array(cols*rows).fill(' ');
+    const cx=W()/2,cy=H()/2,sz=params.size;
+    const cA=Math.cos(this._t),sA=Math.sin(this._t),cB=Math.cos(this._t*.7),sB=Math.sin(this._t*.7);
+    const chars='.:-=+*#@';const{r,g,b}=hex2rgb(params.color);
+    const project=(x0,y0,z0,ch)=>{
+      const y1=y0*cA-z0*sA,z1=y0*sA+z0*cA;
+      const x2=x0*cB+z1*sB,z2=-x0*sB+z1*cB;
+      const sc=300/(z2+300);
+      const px=Math.floor((cx+x2*sc)/cw),py=Math.floor((cy+y1*sc)/cs);
+      if(px>=0&&px<cols&&py>=0&&py<rows){const i=py*cols+px;
+        if(z2>zb[i]){zb[i]=z2;sb[i]=ch;}}
+    };
+    const step=3;
+    for(let u=-sz;u<=sz;u+=step)for(let v=-sz;v<=sz;v+=step){
+      project(u,v,-sz,'#');project(u,v,sz,'@');
+      project(u,-sz,v,'+');project(u,sz,v,'=');
+      project(-sz,u,v,':');project(sz,u,v,'*');
+    }
+    ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
+    for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+      const idx=j*cols+i;if(zb[idx]>-1e9){
+        const br=(zb[idx]+sz)/(sz*2)*.7+.3;
+        ctx.fillStyle=`rgba(${r},${g},${b},${br})`;
+        ctx.fillText(sb[idx],i*cw,j*cs);}
+    }
+  }
+};
+
+
+// ---- Terrain ----
+effects.terrain = {
+  _t:0,animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:7},
+    {key:'speed',label:'Speed',type:'range',min:1,max:10,value:3},
+    {key:'scale',label:'Scale',type:'range',min:1,max:20,value:8},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.005;
+    const cs=params.charSize,cw=cs*.5,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
+    const chars=' .·:;=+*#%@█';const{r,g,b}=hex2rgb(params.color);
+    ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
+    const sc=params.scale*.3;
+    for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+      const nx=(i/cols)*sc+this._t,ny=(j/rows)*sc;
+      const v=(Math.sin(nx*3+ny*2)+Math.sin(nx*5.3-ny*3.7)+Math.cos(nx*2.1+ny*4.8)+Math.sin(nx*ny*2+this._t))/4;
+      const n=(v+1)/2;
+      const h=n>.7?`rgba(${r},${g},${b},1)`:n>.5?`rgba(${r},${g},${b},.7)`:n>.3?`rgba(60,120,180,${n+.2})`:`rgba(30,80,160,${n+.3})`;
+      ctx.fillStyle=h;
+      ctx.fillText(chars[Math.floor(n*(chars.length-1))],i*cw,j*cs);
+    }
+  }
+};
+
+
+// ---- DNA Helix ----
+effects.dna = {
+  _t:0,animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:6,max:18,value:10},
+    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:5},
+    {key:'length',label:'Length',type:'range',min:10,max:60,value:30},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.02;
+    const cx=W()/2,cy=H()/2,amp=Math.min(W(),H())*.25;
+    const pairs='ATCG';const{r,g,b}=hex2rgb(params.color);
+    ctx.font=`bold ${params.charSize}px monospace`;ctx.textBaseline='middle';ctx.textAlign='center';
+    const n=params.length;
+    for(let i=0;i<n;i++){
+      const t=i/n;const y=cy+(t-.5)*H()*.8;
+      const phase=t*Math.PI*4+this._t;
+      const x1=cx+Math.sin(phase)*amp;
+      const x2=cx-Math.sin(phase)*amp;
+      const z=Math.cos(phase);
+      const a1=z>0?.9:.3,a2=z>0?.3:.9;
+      const c1=pairs[i%4],c2=pairs[(i+2)%4];
+      // backbone
+      ctx.fillStyle=`rgba(${r},${g},${b},${a1})`;ctx.fillText(c1,x1,y);
+      ctx.fillStyle=`rgba(${r},${g},${b},${a2})`;ctx.fillText(c2,x2,y);
+      // bridge
+      if(i%2===0){const steps=6;
+        for(let s=1;s<steps;s++){const st=s/steps;
+          const bx=x1+(x2-x1)*st;
+          const ba=Math.abs(z)*.3+.1;
+          ctx.fillStyle=`rgba(${r},${g},${b},${ba})`;ctx.fillText('─',bx,y);}}
+    }
+    ctx.textAlign='left';
+  }
+};
+
+
+// ---- Black Hole ----
+effects.blackhole = {
+  _t:0,animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:7},
+    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:5},
+    {key:'pull',label:'Pull',type:'range',min:1,max:10,value:5},
+    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.01;
+    const cs=params.charSize,cw=cs*.5,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
+    const cx=cols/2,cy=rows/2;
+    const chars=' .·:;+=*#%@';const{r,g,b}=hex2rgb(params.color);
+    ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
+    const pull=params.pull*.15;
+    for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+      const dx=i-cx,dy=(j-cy)*1.8;
+      const dist=Math.sqrt(dx*dx+dy*dy)+.1;
+      const eventH=6;
+      if(dist<eventH)continue;
+      const warp=pull/dist;
+      const angle=Math.atan2(dy,dx)+warp+this._t*.3;
+      const v=(Math.sin(angle*4+dist*.3-this._t)+1)/2;
+      const fade=Math.min(1,dist/30);
+      const bright=v*fade;
+      // accretion disk glow
+      const diskDist=Math.abs(dist-20);
+      const diskGlow=diskDist<8?1-diskDist/8:0;
+      const finalBr=Math.min(1,bright+diskGlow*.5);
+      if(finalBr<.05)continue;
+      const hue=(angle*30+this._t*20)%360;
+      ctx.fillStyle=diskGlow>.1?`hsla(${hue},80%,60%,${finalBr})`:`rgba(${r},${g},${b},${finalBr})`;
+      ctx.fillText(chars[Math.floor(finalBr*(chars.length-1))],i*cw,j*cs);
+    }
   }
 };
 
