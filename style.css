@@ -2,7 +2,7 @@
 *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
 :root {
   --bg:#0c0c0c; --sf:#151515; --sf2:#1c1c1c; --bd:#262626;
-  --tx:#d8d8d8; --dim:#555; --acc:#c8a46e; --acc2:#a07a3a;
+  --tx:#d8d8d8; --dim:#555; --acc:#ffffff; --acc2:#cccccc;
   --fn:'IBMPlex',-apple-system,'Helvetica Neue',sans-serif;
 }
 html,body { height:100%; }
@@ -26,7 +26,10 @@ body.light { --bg:#f2f2f2; --sf:#fff; --sf2:#f7f7f7; --bd:#ddd; --tx:#222; --dim
 #input-text { width:100%; background:var(--sf2); border:1px solid var(--bd); color:var(--tx); font:13px var(--fn); padding:8px; border-radius:4px; resize:vertical; line-height:1.5; }
 #input-text:focus { outline:none; border-color:var(--acc2); }
 #sb-list { flex:1; overflow-y:auto; padding:6px 0; }
-.sb-cat { padding:8px 14px 3px; font-size:10px; font-weight:600; color:var(--dim); letter-spacing:1.2px; text-transform:uppercase; }
+.sb-cat { padding:8px 14px 3px; font-size:10px; font-weight:600; color:var(--dim); letter-spacing:1.2px; text-transform:uppercase; cursor:pointer; user-select:none; display:flex; align-items:center; gap:4px; }
+.sb-cat:hover { color:var(--tx); }
+.sb-cat-active { color:var(--acc); }
+.sb-arrow { font-size:9px; width:10px; display:inline-block; }
 .sb-item { display:block; width:100%; text-align:left; background:none; border:none; color:var(--tx); font:12px var(--fn); padding:7px 16px; cursor:pointer; border-left:2px solid transparent; transition:.12s; }
 .sb-item:hover { background:var(--sf2); }
 .sb-item.active { background:var(--sf2); color:var(--acc); border-left-color:var(--acc); }

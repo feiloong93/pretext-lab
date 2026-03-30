@@ -30,7 +30,8 @@ function wrap(text,font,maxW,lh){
   if(buf)words.push(buf);
   const lines=[]; let line='';
   for(const w of words){if(w==='\n'){lines.push(line);line='';continue;}
-    const t=line?line+' '+w:w; if(ctx.measureText(t).width>maxW&&line){lines.push(line);line=w;}else line=t;}
+    const sep=line?(isCJK(w[0])||isCJK(line[line.length-1])?'':' '):'';
+    const t=line?line+sep+w:w; if(ctx.measureText(t).width>maxW&&line){lines.push(line);line=w;}else line=t;}
   if(line)lines.push(line);
   return{lines,height:lines.length*lh};
 }
@@ -45,7 +46,7 @@ const i18n = {
     tunnel:'ASCII Tunnel',mandelbrot:'Mandelbrot',life:'Game of Life',clock:'ASCII Clock',
     ripple:'Char Ripple',lorenz:'Lorenz Attractor',cube:'Rotating Cube',terrain:'Terrain',dna:'DNA Helix',blackhole:'Black Hole',
     wave:'Text Wave',typewriter:'Typewriter',gravity:'Gravity Text',morph:'Glitch Morph',
-    neon:'Neon Glow',gradient:'Gradient Text',heightpredict:'Height Predict',virtuallist:'Virtual List'},
+    neon:'Neon Glow',gradient:'Gradient Text',heightpredict:'Height Predict',virtuallist:'Virtual List',img2ascii:'Image to ASCII'},
   zh:{params:'参数调节',cat_layout:'排版布局',cat_ascii:'ASCII 艺术',cat_fx:'交互动效',cat_style:'文字样式',cat_tool:'工具',
     multicolumn:'多栏文字流',textwrap:'文字环绕',shrinkwrap:'收缩包裹',accordion:'手风琴',richtext:'富文本混排',
     fluid:'流体烟雾',torus:'线框甜甜圈',particles:'字符粒子',matrix:'矩阵雨',
@@ -53,7 +54,7 @@ const i18n = {
     tunnel:'ASCII 隧道',mandelbrot:'曼德博分形',life:'生命游戏',clock:'ASCII 时钟',
     ripple:'字符涟漪',lorenz:'洛伦兹吸引子',cube:'旋转立方体',terrain:'地形生成',dna:'DNA 双螺旋',blackhole:'黑洞',
     wave:'文字波浪',typewriter:'打字机',gravity:'重力文字',morph:'故障变形',
-    neon:'霓虹发光',gradient:'渐变文字',heightpredict:'高度预测',virtuallist:'虚拟列表'}
+    neon:'霓虹发光',gradient:'渐变文字',heightpredict:'高度预测',virtuallist:'虚拟列表',img2ascii:'图片转 ASCII'}
 };
 function t(k){ return(i18n[lang]||i18n.en)[k]||k; }
 function applyI18n(){ document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);}); $('#btn-lang').textContent=lang==='en'?'中文':'EN'; buildSidebar(); }
@@ -65,15 +66,22 @@ const cats = [
   {key:'cat_ascii',items:['fluid','torus','particles','matrix','globe','plasma','starfield','fire','spiral','textshape','tunnel','mandelbrot','life','clock','ripple','lorenz','cube','terrain','dna','blackhole']},
   {key:'cat_fx',items:['wave','typewriter','gravity','morph']},
   {key:'cat_style',items:['neon','gradient']},
-  {key:'cat_tool',items:['heightpredict','virtuallist']},
+  {key:'cat_tool',items:['heightpredict','virtuallist','img2ascii']},
 ];
 
 // ---- Sidebar ----
+const catCollapsed = {};
 function buildSidebar(){
   const el=$('#sb-list'); el.innerHTML='';
   cats.forEach(c=>{
-    el.insertAdjacentHTML('beforeend',`<div class="sb-cat">${t(c.key)}</div>`);
-    c.items.forEach(k=>{
+    const open=!catCollapsed[c.key];
+    const hasActive=c.items.includes(activeKey);
+    const hdr=document.createElement('div');
+    hdr.className='sb-cat'+(hasActive?' sb-cat-active':'');
+    hdr.innerHTML=`<span class="sb-arrow">${open?'▾':'▸'}</span> ${t(c.key)}`;
+    hdr.onclick=()=>{catCollapsed[c.key]=!catCollapsed[c.key];buildSidebar();};
+    el.appendChild(hdr);
+    if(open) c.items.forEach(k=>{
       const btn=document.createElement('button');
       btn.className='sb-item'+(k===activeKey?' active':'');
       btn.textContent=t(k); btn.onclick=()=>activate(k);
@@ -90,7 +98,7 @@ function buildPanel(defs){
     const g=document.createElement('div'); g.className='pg';
     if(d.type==='range'){
       g.innerHTML=`<div class="pg-head"><span>${d.label}</span><span class="pg-val" id="v-${d.key}">${d.value}</span></div><input type="range" min="${d.min}" max="${d.max}" step="${d.step||1}" value="${d.value}">`;
-      g.querySelector('input').oninput=e=>{params[d.key]=+e.target.value;$(`#v-${d.key}`).textContent=params[d.key];if(!effects[activeKey]?.animated)draw();};
+      g.querySelector('input').oninput=e=>{params[d.key]=+e.target.value;$(`#v-${d.key}`).textContent=d.step&&d.step<1?(+e.target.value).toFixed(1):+e.target.value;if(!effects[activeKey]?.animated)draw();};
     }else if(d.type==='select'){
       g.innerHTML=`<div class="pg-head"><span>${d.label}</span></div><select>${d.options.map(o=>`<option${o===d.value?' selected':''}>${o}</option>`).join('')}</select>`;
       g.querySelector('select').onchange=e=>{params[d.key]=e.target.value;if(!effects[activeKey]?.animated)draw();};
@@ -129,7 +137,7 @@ effects.multicolumn = {
     {key:'gap',label:'Gap',type:'range',min:10,max:80,value:30},
     {key:'fontSize',label:'Font Size',type:'range',min:10,max:36,value:15},
     {key:'lineHeight',label:'Line Height',type:'range',min:14,max:48,value:22},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr(); const m=40,tw=W()-m*2,cw=(tw-params.gap*(params.cols-1))/params.cols,
@@ -154,7 +162,7 @@ effects.textwrap = {
     {key:'os',label:'Object Size',type:'range',min:30,max:200,value:90},
     {key:'fontSize',label:'Font Size',type:'range',min:11,max:28,value:15},
     {key:'lineHeight',label:'Line Height',type:'range',min:16,max:40,value:22},
-    {key:'color',label:'Color',type:'color',value:'#d4c4a0'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr(); const text=txt().repeat(15),font=`${params.fontSize}px ${FN}`,lh=params.lineHeight,
@@ -178,7 +186,7 @@ effects.shrinkwrap = {
     {key:'maxW',label:'Max Width',type:'range',min:100,max:800,value:400},
     {key:'fontSize',label:'Font Size',type:'range',min:12,max:36,value:18},
     {key:'lineHeight',label:'Line Height',type:'range',min:18,max:48,value:28},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();const font=`${params.fontSize}px ${FN}`,lh=params.lineHeight,{lines}=wrap(txt(),font,params.maxW,lh);
@@ -201,8 +209,8 @@ effects.accordion = {
   params:[
     {key:'n',label:'Sections',type:'range',min:2,max:8,value:4},
     {key:'fontSize',label:'Font Size',type:'range',min:11,max:22,value:13},
-    {key:'speed',label:'Speed',type:'range',min:1,max:10,value:4},
-    {key:'color',label:'Accent',type:'color',value:'#c8a46e'},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:4},
+    {key:'color',label:'Accent',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();const n=params.n,font=`${params.fontSize}px ${FN}`,lh=params.fontSize+8,
@@ -235,9 +243,9 @@ effects.richtext = {
   params:[
     {key:'fontSize',label:'Font Size',type:'range',min:14,max:32,value:17},
     {key:'maxW',label:'Max Width',type:'range',min:200,max:800,value:500},
-    {key:'color',label:'Text',type:'color',value:'#d4c4a0'},
+    {key:'color',label:'Text',type:'color',value:'#ffffff'},
     {key:'code',label:'Code',type:'color',value:'#7ec8a0'},
-    {key:'tag',label:'Tag',type:'color',value:'#c8a46e'},
+    {key:'tag',label:'Tag',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();const fs=params.fontSize,segs=[
@@ -265,10 +273,10 @@ effects.fluid = {
   _t:0,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:6,max:24,value:11},
-    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:7},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:20,value:7},
     {key:'intensity',label:'Intensity',type:'range',min:1,max:10,value:5},
     {key:'chars',label:'Characters',type:'select',options:['blocks','ascii','custom'],value:'blocks'},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.01;
@@ -292,11 +300,11 @@ effects.torus = {
   _t:0,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:5,max:18,value:9},
-    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:5},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:20,value:5},
     {key:'R',label:'Major R',type:'range',min:40,max:200,value:110},
     {key:'r',label:'Minor R',type:'range',min:15,max:100,value:45},
     {key:'chars',label:'Characters',type:'select',options:['shading','custom'],value:'shading'},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.007;
@@ -328,9 +336,9 @@ effects.particles = {
   params:[
     {key:'count',label:'Count',type:'range',min:30,max:400,value:150},
     {key:'size',label:'Size',type:'range',min:8,max:30,value:14},
-    {key:'speed',label:'Speed',type:'range',min:1,max:10,value:3},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:3},
     {key:'chars',label:'Characters',type:'select',options:['kanji','latin','symbols','custom'],value:'kanji'},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   init(){this._ok=false;this._p=[];},
   render(){
@@ -357,9 +365,9 @@ effects.matrix = {
   _d:[],_clear:true,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:8,max:22,value:13},
-    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:7},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:20,value:7},
     {key:'chars',label:'Characters',type:'select',options:['katakana','chinese','custom'],value:'katakana'},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   init(){this._d=[];this._clear=true;},
   render(){
@@ -388,8 +396,8 @@ effects.wave = {
     {key:'fontSize',label:'Font Size',type:'range',min:20,max:80,value:42},
     {key:'amp',label:'Amplitude',type:'range',min:3,max:80,value:25},
     {key:'freq',label:'Frequency',type:'range',min:1,max:20,value:7},
-    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:5},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:20,value:5},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.03;const text=txt(),fs=params.fontSize;
@@ -409,9 +417,9 @@ effects.typewriter = {
   init(){this._ci=0;this._t=0;},
   params:[
     {key:'fontSize',label:'Font Size',type:'range',min:14,max:52,value:24},
-    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:5},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:20,value:5},
     {key:'maxW',label:'Max Width',type:'range',min:200,max:800,value:500},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.04;this._blink+=.08;
@@ -434,7 +442,7 @@ effects.gravity = {
     {key:'fontSize',label:'Font Size',type:'range',min:18,max:64,value:36},
     {key:'grav',label:'Gravity',type:'range',min:1,max:20,value:5},
     {key:'bounce',label:'Bounce',type:'range',min:1,max:9,value:6},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();const text=[...txt()],fs=params.fontSize;
@@ -455,9 +463,9 @@ effects.morph = {
   _t:0,animated:true,
   params:[
     {key:'fontSize',label:'Font Size',type:'range',min:36,max:120,value:64},
-    {key:'speed',label:'Speed',type:'range',min:1,max:10,value:3},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:3},
     {key:'glitch',label:'Glitch',type:'range',min:1,max:30,value:10},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.015;const text=[...txt()].slice(0,14).join(''),fs=params.fontSize;
@@ -497,7 +505,7 @@ effects.gradient = {
   params:[
     {key:'fontSize',label:'Font Size',type:'range',min:30,max:100,value:56},
     {key:'angle',label:'Angle',type:'range',min:0,max:360,value:135},
-    {key:'c1',label:'Color 1',type:'color',value:'#c8a46e'},
+    {key:'c1',label:'Color 1',type:'color',value:'#ffffff'},
     {key:'c2',label:'Color 2',type:'color',value:'#e8d5b0'},
     {key:'c3',label:'Color 3',type:'color',value:'#8a6d3b'},
   ],
@@ -518,7 +526,7 @@ effects.heightpredict = {
     {key:'fontSize',label:'Font Size',type:'range',min:11,max:36,value:15},
     {key:'lineHeight',label:'Line Height',type:'range',min:14,max:48,value:22},
     {key:'maxW',label:'Width',type:'range',min:100,max:800,value:380},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();const font=`${params.fontSize}px ${FN}`,lh=params.lineHeight;
@@ -542,8 +550,8 @@ effects.virtuallist = {
     {key:'items',label:'Total Items',type:'range',min:100,max:5000,step:100,value:1000},
     {key:'fontSize',label:'Font Size',type:'range',min:11,max:18,value:13},
     {key:'cw',label:'Width',type:'range',min:200,max:550,value:340},
-    {key:'speed',label:'Scroll Speed',type:'range',min:1,max:10,value:3},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'speed',label:'Scroll Speed',type:'range',min:0.1,step:0.1,max:10,value:3},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();const msgs=['Hey, pretext 真的能预测文本高度吗？','是的，prepare + layout 两行搞定。',
@@ -578,14 +586,15 @@ effects.globe = {
   _t:0,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:5,max:16,value:8},
-    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:4},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:20,value:4},
+    {key:'chars',label:'Characters',type:'select',options:['shading','custom'],value:'shading'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.008;
     const cs=params.charSize,cw=cs*.6,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
     const cx=cols/2,cy=rows/2,R=Math.min(cx,cy)*.75;
-    const chars='.,-~:;=!*#$@';
+    const chars=params.chars==='custom'?(' '+[...new Set([...txt()])].join('')):'.,-~:;=!*#$@';
     ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
     const{r,g,b}=hex2rgb(params.color);
     for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
@@ -607,14 +616,15 @@ effects.plasma = {
   _t:0,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:5,max:18,value:9},
-    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:6},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:20,value:6},
     {key:'scale',label:'Scale',type:'range',min:1,max:20,value:8},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'chars',label:'Characters',type:'select',options:['shading','custom'],value:'shading'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.012;
     const cs=params.charSize,cw=cs*.6,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
-    const chars=' .:;+=xX$&#@';const sc=params.scale*.5;
+    const chars=params.chars==='custom'?(' '+[...new Set([...txt()])].join('')):' .:;+=xX$&#@';const sc=params.scale*.5;
     ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
     const{r,g,b}=hex2rgb(params.color);
     for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
@@ -634,16 +644,17 @@ effects.starfield = {
   _stars:[],_ok:false,animated:true,
   params:[
     {key:'count',label:'Stars',type:'range',min:50,max:500,value:200},
-    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:6},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:20,value:6},
     {key:'charSize',label:'Char Size',type:'range',min:6,max:18,value:10},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'chars',label:'Characters',type:'select',options:['default','custom'],value:'default'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   init(){this._ok=false;},
   render(){
     clr();const cx=W()/2,cy=H()/2;
     if(!this._ok||this._stars.length!==params.count){
       this._stars=Array.from({length:params.count},()=>({x:(Math.random()-.5)*W()*2,y:(Math.random()-.5)*H()*2,z:Math.random()*1000}));this._ok=true;}
-    const chars='.+*#@';const{r,g,b}=hex2rgb(params.color);
+    const chars=params.chars==='custom'?([...new Set([...txt()])].join('')||'.+*#@'):'.+*#@';const{r,g,b}=hex2rgb(params.color);
     ctx.font=`${params.charSize}px monospace`;ctx.textBaseline='middle';ctx.textAlign='center';
     this._stars.forEach(s=>{s.z-=params.speed*2;if(s.z<=1){s.z=1000;s.x=(Math.random()-.5)*W()*2;s.y=(Math.random()-.5)*H()*2;}
       const sx=cx+s.x/s.z*200,sy=cy+s.y/s.z*200,br=1-s.z/1000;
@@ -661,6 +672,7 @@ effects.fire = {
     {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:6},
     {key:'intensity',label:'Intensity',type:'range',min:1,max:10,value:6},
     {key:'wind',label:'Wind',type:'range',min:-5,max:5,value:0},
+    {key:'chars',label:'Characters',type:'select',options:['default','custom'],value:'default'},
     {key:'color',label:'Color',type:'color',value:'#ff6622'},
   ],
   init(){this._buf=null;},
@@ -674,7 +686,7 @@ effects.fire = {
       const avg=(buf[(j+1)*cols+Math.max(0,i-1)]+buf[(j+1)*cols+i]+buf[(j+1)*cols+Math.min(cols-1,i+1)]+buf[(j+1)*cols+w])/4;
       buf[j*cols+i]=Math.max(0,avg-0.004-Math.random()*.008);
     }
-    const chars=' .:-=+*#%@';
+    const chars=params.chars==='custom'?(' '+[...new Set([...txt()])].join('')):' .:-=+*#%@';
     ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
     for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
       const v=Math.min(1,buf[j*cols+i]);if(v<.02)continue;
@@ -691,15 +703,16 @@ effects.spiral = {
   _t:0,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:5,max:16,value:8},
-    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:5},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:20,value:5},
     {key:'arms',label:'Arms',type:'range',min:1,max:8,value:3},
     {key:'density',label:'Density',type:'range',min:50,max:500,value:200},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'chars',label:'Characters',type:'select',options:['default','custom'],value:'default'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.015;
     const cx=W()/2,cy=H()/2,maxR=Math.min(cx,cy)*.85;
-    const chars='.+*#@$';const{r,g,b}=hex2rgb(params.color);
+    const chars=params.chars==='custom'?([...new Set([...txt()])].join('')||'.+*#@$'):'.+*#@$';const{r,g,b}=hex2rgb(params.color);
     ctx.font=`${params.charSize}px monospace`;ctx.textBaseline='middle';ctx.textAlign='center';
     for(let a=0;a<params.arms;a++){const off=a/params.arms*Math.PI*2;
       for(let i=0;i<params.density;i++){const t=i/params.density;
@@ -715,16 +728,17 @@ effects.spiral = {
 
 // ---- Text Shape ----
 effects.textshape = {
-  _pts:null,
+  _pts:null,_lastText:'',_lastFs:0,
   params:[
     {key:'fontSize',label:'Shape Font',type:'range',min:60,max:300,value:150},
     {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:7},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
-  init(){this._pts=null;},
+  init(){this._pts=null;this._lastText='';},
   render(){
-    clr();const text=txt().slice(0,6)||'A';
-    if(!this._pts){
+    const text=txt().slice(0,6)||'A';
+    if(!this._pts||this._lastText!==text||this._lastFs!==params.fontSize){
+      clr();this._lastText=text;this._lastFs=params.fontSize;
       const fs=params.fontSize;
       ctx.font=`900 ${fs}px ${FN}`;ctx.textBaseline='middle';ctx.textAlign='center';
       ctx.fillStyle='#fff';ctx.fillText(text,W()/2,H()/2);
@@ -732,8 +746,8 @@ effects.textshape = {
       this._pts=[];const step=Math.max(2,Math.floor(params.charSize*.8));
       for(let y=0;y<id.height;y+=step)for(let x=0;x<id.width;x+=step){
         if(id.data[(y*id.width+x)*4+3]>128)this._pts.push({x:x/dpr,y:y/dpr});}
-      clr();
     }
+    clr();
     const fill=[...new Set([...txt()])].join('')||'PRETEXT';
     const cs=params.charSize;
     ctx.font=`${cs}px monospace`;ctx.textBaseline='top';ctx.fillStyle=params.color;
@@ -748,14 +762,15 @@ effects.tunnel = {
   _t:0,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:5,max:16,value:8},
-    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:6},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:20,value:6},
     {key:'rings',label:'Rings',type:'range',min:5,max:30,value:15},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'chars',label:'Characters',type:'select',options:['default','custom'],value:'default'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.02;
     const cx=W()/2,cy=H()/2,maxR=Math.min(cx,cy);
-    const chars=' .:-=+*#%@';const{r,g,b}=hex2rgb(params.color);
+    const chars=params.chars==='custom'?(' '+[...new Set([...txt()])].join('')):' .:-=+*#%@';const{r,g,b}=hex2rgb(params.color);
     ctx.font=`${params.charSize}px monospace`;ctx.textBaseline='middle';ctx.textAlign='center';
     for(let ring=params.rings;ring>=1;ring--){
       const t=(ring/params.rings+this._t*.1)%1;
@@ -775,14 +790,15 @@ effects.mandelbrot = {
   _t:0,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:7},
-    {key:'speed',label:'Zoom Speed',type:'range',min:1,max:10,value:3},
+    {key:'speed',label:'Zoom Speed',type:'range',min:0.1,step:0.1,max:10,value:3},
     {key:'maxIter',label:'Iterations',type:'range',min:20,max:200,value:60},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'chars',label:'Characters',type:'select',options:['default','custom'],value:'default'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.003;
     const cs=params.charSize,cw=cs*.5,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
-    const chars=' .`-~:;=+*#%@$';
+    const chars=params.chars==='custom'?(' '+[...new Set([...txt()])].join('')):' .`-~:;=+*#%@$';
     const zoom=2+Math.sin(this._t)*.8;
     const ox=-0.745,oy=0.186;
     ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
@@ -805,9 +821,10 @@ effects.life = {
   _grid:null,_cols:0,_rows:0,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:7},
-    {key:'speed',label:'Speed',type:'range',min:1,max:10,value:4},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:4},
     {key:'density',label:'Init Density',type:'range',min:1,max:9,value:4},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'chars',label:'Characters',type:'select',options:['blocks','custom'],value:'blocks'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   _fc:0,
   init(){this._grid=null;this._fc=0;},
@@ -832,7 +849,7 @@ effects.life = {
       }
       this._grid=next;
     }
-    const chars=txt()||'█';const{r,g,b}=hex2rgb(params.color);
+    const chars=params.chars==='custom'?([...new Set([...txt()])].join('')||'█'):'█';const{r,g,b}=hex2rgb(params.color);
     ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
     for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
       if(this._grid[j*cols+i]){ctx.fillStyle=`rgb(${r},${g},${b})`;
@@ -847,16 +864,17 @@ effects.clock = {
   animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:4,max:12,value:6},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'chars',label:'Characters',type:'select',options:['default','custom'],value:'default'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();const cs=params.charSize,cw=cs*.6,cx=W()/2,cy=H()/2,R=Math.min(cx,cy)*.7;
     const now=new Date(),h=now.getHours()%12,m=now.getMinutes(),s=now.getSeconds(),ms=now.getMilliseconds();
-    const chars='·•○●';const{r,g,b}=hex2rgb(params.color);
+    const customCh=params.chars==='custom'?([...new Set([...txt()])].join('')||'●'):null;const{r,g,b}=hex2rgb(params.color);
     ctx.font=`${cs}px monospace`;ctx.textBaseline='middle';ctx.textAlign='center';
     // dial
     for(let i=0;i<60;i++){const a=(i/60)*Math.PI*2-Math.PI/2;
-      const rr=i%5===0?R:R*.95;const ch=i%5===0?'●':'·';
+      const rr=i%5===0?R:R*.95;const ch=customCh?customCh[i%customCh.length]:(i%5===0?'●':'·');
       ctx.fillStyle=`rgba(${r},${g},${b},${i%5===0?1:.4})`;
       ctx.fillText(ch,cx+Math.cos(a)*rr,cy+Math.sin(a)*rr);}
     // numbers
@@ -885,16 +903,17 @@ effects.ripple = {
   _t:0,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:5,max:16,value:8},
-    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:5},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:20,value:5},
     {key:'waves',label:'Waves',type:'range',min:1,max:10,value:3},
     {key:'amp',label:'Amplitude',type:'range',min:1,max:20,value:8},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'chars',label:'Characters',type:'select',options:['default','custom'],value:'default'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.02;
     const cs=params.charSize,cw=cs*.6,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
     const cx=cols/2,cy=rows/2;
-    const chars=' ~≈∽∿≋';const{r,g,b}=hex2rgb(params.color);
+    const chars=params.chars==='custom'?(' '+[...new Set([...txt()])].join('')):' ~≈∽∿≋';const{r,g,b}=hex2rgb(params.color);
     ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
     for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
       const dx=i-cx,dy=(j-cy)*2;const dist=Math.sqrt(dx*dx+dy*dy);
@@ -913,9 +932,10 @@ effects.lorenz = {
   _pts:[],_ok:false,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:6},
-    {key:'speed',label:'Speed',type:'range',min:1,max:10,value:4},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:4},
     {key:'trail',label:'Trail',type:'range',min:100,max:3000,value:800},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'chars',label:'Characters',type:'select',options:['default','custom'],value:'default'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   init(){this._pts=[];this._ok=false;this._x=0.1;this._y=0;this._z=0;},
   render(){
@@ -928,7 +948,7 @@ effects.lorenz = {
       this._pts.push({x:this._x,y:this._y,z:this._z});
     }
     while(this._pts.length>params.trail)this._pts.shift();
-    const chars='.·:+*#@';const{r,g,b}=hex2rgb(params.color);
+    const chars=params.chars==='custom'?([...new Set([...txt()])].join('')||'.·:+*#@'):'.·:+*#@';const{r,g,b}=hex2rgb(params.color);
     ctx.font=`${params.charSize}px monospace`;ctx.textBaseline='middle';ctx.textAlign='center';
     const cx=W()/2,cy=H()/2,sc=Math.min(W(),H())/60;
     this._pts.forEach((p,i)=>{const t=i/this._pts.length;
@@ -944,9 +964,10 @@ effects.cube = {
   _t:0,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:7},
-    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:4},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:20,value:4},
     {key:'size',label:'Size',type:'range',min:30,max:200,value:80},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'chars',label:'Characters',type:'select',options:['default','custom'],value:'default'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.01;
@@ -955,7 +976,7 @@ effects.cube = {
     const sb=new Array(cols*rows).fill(' ');
     const cx=W()/2,cy=H()/2,sz=params.size;
     const cA=Math.cos(this._t),sA=Math.sin(this._t),cB=Math.cos(this._t*.7),sB=Math.sin(this._t*.7);
-    const chars='.:-=+*#@';const{r,g,b}=hex2rgb(params.color);
+    const chars=params.chars==='custom'?([...new Set([...txt()])].join('')||'.:-=+*#@'):'.:-=+*#@';const{r,g,b}=hex2rgb(params.color);
     const project=(x0,y0,z0,ch)=>{
       const y1=y0*cA-z0*sA,z1=y0*sA+z0*cA;
       const x2=x0*cB+z1*sB,z2=-x0*sB+z1*cB;
@@ -986,14 +1007,15 @@ effects.terrain = {
   _t:0,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:7},
-    {key:'speed',label:'Speed',type:'range',min:1,max:10,value:3},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:3},
     {key:'scale',label:'Scale',type:'range',min:1,max:20,value:8},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'chars',label:'Characters',type:'select',options:['default','custom'],value:'default'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.005;
     const cs=params.charSize,cw=cs*.5,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
-    const chars=' .·:;=+*#%@█';const{r,g,b}=hex2rgb(params.color);
+    const chars=params.chars==='custom'?(' '+[...new Set([...txt()])].join('')):' .·:;=+*#%@█';const{r,g,b}=hex2rgb(params.color);
     ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
     const sc=params.scale*.3;
     for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
@@ -1013,14 +1035,16 @@ effects.dna = {
   _t:0,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:6,max:18,value:10},
-    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:5},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:20,value:5},
     {key:'length',label:'Length',type:'range',min:10,max:60,value:30},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'chars',label:'Characters',type:'select',options:['dna','custom'],value:'dna'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.02;
     const cx=W()/2,cy=H()/2,amp=Math.min(W(),H())*.25;
-    const pairs='ATCG';const{r,g,b}=hex2rgb(params.color);
+    const pairs=params.chars==='custom'?([...new Set([...txt()])].join('')||'ATCG'):'ATCG';
+    const{r,g,b}=hex2rgb(params.color);
     ctx.font=`bold ${params.charSize}px monospace`;ctx.textBaseline='middle';ctx.textAlign='center';
     const n=params.length;
     for(let i=0;i<n;i++){
@@ -1030,11 +1054,9 @@ effects.dna = {
       const x2=cx-Math.sin(phase)*amp;
       const z=Math.cos(phase);
       const a1=z>0?.9:.3,a2=z>0?.3:.9;
-      const c1=pairs[i%4],c2=pairs[(i+2)%4];
-      // backbone
+      const c1=pairs[i%pairs.length],c2=pairs[(i+2)%pairs.length];
       ctx.fillStyle=`rgba(${r},${g},${b},${a1})`;ctx.fillText(c1,x1,y);
       ctx.fillStyle=`rgba(${r},${g},${b},${a2})`;ctx.fillText(c2,x2,y);
-      // bridge
       if(i%2===0){const steps=6;
         for(let s=1;s<steps;s++){const st=s/steps;
           const bx=x1+(x2-x1)*st;
@@ -1051,15 +1073,16 @@ effects.blackhole = {
   _t:0,animated:true,
   params:[
     {key:'charSize',label:'Char Size',type:'range',min:4,max:14,value:7},
-    {key:'speed',label:'Speed',type:'range',min:1,max:20,value:5},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:20,value:5},
     {key:'pull',label:'Pull',type:'range',min:1,max:10,value:5},
-    {key:'color',label:'Color',type:'color',value:'#c8a46e'},
+    {key:'chars',label:'Characters',type:'select',options:['default','custom'],value:'default'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
   ],
   render(){
     clr();this._t+=params.speed*.01;
     const cs=params.charSize,cw=cs*.5,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
     const cx=cols/2,cy=rows/2;
-    const chars=' .·:;+=*#%@';const{r,g,b}=hex2rgb(params.color);
+    const chars=params.chars==='custom'?(' '+[...new Set([...txt()])].join('')):' .·:;+=*#%@';const{r,g,b}=hex2rgb(params.color);
     ctx.font=`${cs}px monospace`;ctx.textBaseline='top';
     const pull=params.pull*.15;
     for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
@@ -1081,6 +1104,52 @@ effects.blackhole = {
       ctx.fillStyle=diskGlow>.1?`hsla(${hue},80%,60%,${finalBr})`:`rgba(${r},${g},${b},${finalBr})`;
       ctx.fillText(chars[Math.floor(finalBr*(chars.length-1))],i*cw,j*cs);
     }
+  }
+};
+
+// ---- Image to ASCII ----
+effects.img2ascii = {
+  _img:null,_ascii:'',
+  params:[
+    {key:'width',label:'ASCII Width',type:'range',min:40,max:200,value:100},
+    {key:'brightness',label:'Brightness',type:'range',min:-100,max:100,value:0},
+    {key:'contrast',label:'Contrast',type:'range',min:-100,max:100,value:0},
+    {key:'invert',label:'Invert',type:'select',options:['no','yes'],value:'no'},
+    {key:'charset',label:'Charset',type:'select',options:['detailed','standard','blocks','binary','custom'],value:'detailed'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  init(){
+    if(!this._fileInput){
+      this._fileInput=document.createElement('input');this._fileInput.type='file';this._fileInput.accept='image/*';
+      this._fileInput.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+        r.onload=ev=>{const img=new Image();img.onload=()=>{this._img=img;this._ascii='';draw();};img.src=ev.target.result;};
+        r.readAsDataURL(f);};
+    }
+    this._fileInput.click();
+  },
+  render(){
+    clr();
+    if(!this._img){ctx.fillStyle=params.color;ctx.font=`16px ${FN}`;ctx.textBaseline='middle';ctx.textAlign='center';
+      ctx.fillText(lang==='zh'?'点击左侧 "图片转 ASCII" 重新选择图片':'Click "Image to ASCII" to select an image',W()/2,H()/2);ctx.textAlign='left';return;}
+    const img=this._img,aw=params.width,ar=0.55,ah=Math.round((img.height/img.width)*aw*ar);
+    const oc=document.createElement('canvas');oc.width=aw;oc.height=ah;
+    const ox=oc.getContext('2d');ox.drawImage(img,0,0,aw,ah);
+    const id=ox.getImageData(0,0,aw,ah),d=id.data;
+    const gradients={detailed:"$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. ",
+      standard:"@%#*+=-:. ",blocks:"█▓▒░ ",binary:"01",custom:([...new Set([...txt()])].join('')||'@')+" "};
+    const grad=gradients[params.charset]||gradients.detailed;const nL=grad.length;
+    const cf=(259*(params.contrast+255))/(255*(259-params.contrast));
+    let ascii='';
+    for(let y=0;y<ah;y++){let line='';for(let x=0;x<aw;x++){const i=(y*aw+x)*4;
+      let lum=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      if(params.invert==='yes')lum=255-lum;
+      lum=Math.max(0,Math.min(255,cf*(lum-128)+128+params.brightness));
+      line+=grad[Math.round((lum/255)*(nL-1))];}ascii+=line+'\n';}
+    const cs=Math.min(Math.floor(W()/aw),Math.floor(H()/(ah*1.1)),14);
+    ctx.font=`${Math.max(3,cs)}px monospace`;ctx.textBaseline='top';ctx.fillStyle=params.color;
+    const lines=ascii.split('\n');const lh=Math.max(3,cs);
+    const x0=Math.max(0,(W()-aw*cs*.6)/2),y0=Math.max(0,(H()-ah*lh)/2);
+    for(let i=0;i<lines.length;i++)ctx.fillText(lines[i],x0,y0+i*lh);
   }
 };
 
