@@ -63,6 +63,7 @@ const i18n = {
     img2ascii:'Image to ASCII',orbit:'Text Orbit',helix:'Text Helix',scatter:'Scatter Type',
     varasci:'Variable ASCII',editorial:'Editorial Engine',masonry:'Masonry',justify:'Justification',
     autogrow:'Auto-Grow Input',bubblewar:'Bubble Showdown',textphysics:'Text Physics',obstacle:'Obstacle Flow',
+    kineflow:'Kinetic Flow',textpour:'Text Pour',breathe:'Breathing Type',fontmix:'Font Mixer',textcircle:'Circular Type',
     p_charSize:'Char Size',p_fontSize:'Font Size',p_speed:'Speed',p_color:'Color',p_chars:'Characters',
     p_count:'Count',p_size:'Size',p_intensity:'Intensity',p_scale:'Scale',p_density:'Density',
     p_arms:'Arms',p_rings:'Rings',p_trail:'Trail',p_pull:'Pull',p_length:'Length',p_strands:'Strands',
@@ -85,6 +86,7 @@ const i18n = {
     img2ascii:'图片转 ASCII',orbit:'文字轨道',helix:'文字螺旋',scatter:'散射文字',
     varasci:'可变排印 ASCII',editorial:'编辑引擎',masonry:'瀑布流',justify:'对齐对比',
     autogrow:'自增长输入框',bubblewar:'气泡收缩对决',textphysics:'文字物理',obstacle:'障碍绕流',
+    kineflow:'动态排版流',textpour:'文字倾泻',breathe:'呼吸字体',fontmix:'字重混排',textcircle:'环形排版',
     p_charSize:'字符大小',p_fontSize:'字号',p_speed:'速度',p_color:'颜色',p_chars:'字符集',
     p_count:'数量',p_size:'尺寸',p_intensity:'强度',p_scale:'缩放',p_density:'密度',
     p_arms:'旋臂',p_rings:'环数',p_trail:'轨迹长度',p_pull:'引力',p_length:'长度',p_strands:'股数',
@@ -105,7 +107,7 @@ const cats = [
   {key:'cat_tool',items:['img2ascii']},
   {key:'cat_layout',items:['multicolumn','textwrap','shrinkwrap','accordion','richtext','editorial','masonry','justify','autogrow','bubblewar','obstacle']},
   {key:'cat_ascii',items:['varasci','fluid','torus','particles','matrix','globe','plasma','starfield','spiral','textshape','tunnel','mandelbrot','life','clock','ripple','lorenz','cube','terrain','dna','blackhole']},
-  {key:'cat_fx',items:['wave','typewriter','gravity','morph','orbit','helix','scatter','textphysics']},
+  {key:'cat_fx',items:['wave','typewriter','gravity','morph','orbit','helix','scatter','textphysics','kineflow','textpour','breathe','fontmix','textcircle']},
 ];
 
 // ---- Sidebar ----
@@ -1789,6 +1791,191 @@ effects.textphysics = {
     ctx.strokeStyle=dark?'#222':'#ddd';ctx.beginPath();ctx.moveTo(0,floor);ctx.lineTo(W(),floor);ctx.stroke();
     // auto reset
     if(this._chars.every(p=>p.grounded)){setTimeout(()=>{this._ok=false;},2000);}
+  }
+};
+
+// ---- Kinetic Flow (inspired by @antonin.work — text reflows with animated width) ----
+effects.kineflow = {
+  _t:0,animated:true,
+  params:[
+    {key:'fontSize',label:'Font Size',type:'range',min:14,max:48,value:24},
+    {key:'lineHeight',label:'Line Height',type:'range',min:18,max:60,value:34},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:2},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.008;
+    const text=txt(),font=`600 ${params.fontSize}px ${FN}`,lh=params.lineHeight;
+    const minW=120,maxW=Math.min(W()-60,600);
+    const w=minW+(maxW-minW)*((Math.sin(this._t)+1)/2);
+    const{lines}=wrap(text,font,w,lh);
+    const bx=(W()-w)/2,by=(H()-lines.length*lh)/2;
+    // animated container
+    ctx.strokeStyle=dark?'#333':'#ccc';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+    ctx.strokeRect(bx-8,by-8,w+16,lines.length*lh+16);ctx.setLineDash([]);
+    // text with per-line fade
+    ctx.font=font;ctx.textBaseline='top';
+    const{r,g,b}=hex2rgb(params.color);
+    lines.forEach((l,i)=>{
+      const a=.4+.6*Math.sin(i*.5+this._t*3)*.5+.5;
+      ctx.fillStyle=`rgba(${r},${g},${b},${Math.max(.3,a)})`;
+      ctx.fillText(l,bx,by+i*lh);
+    });
+    // width indicator
+    ctx.fillStyle=dark?'#444':'#aaa';ctx.font='10px monospace';ctx.textBaseline='top';
+    ctx.fillText(`${Math.round(w)}px`,bx,by+lines.length*lh+14);
+  }
+};
+
+// ---- Text Pour (inspired by @lucas__crespo — text pouring down like liquid) ----
+effects.textpour = {
+  _t:0,_chars:[],_ok:false,animated:true,
+  init(){this._ok=false;this._t=0;},
+  params:[
+    {key:'fontSize',label:'Font Size',type:'range',min:14,max:48,value:22},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:3},
+    {key:'spread',label:'Spread',type:'range',min:10,max:200,value:80},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.02;
+    const text=[...txt()],fs=params.fontSize;
+    ctx.font=`600 ${fs}px ${FN}`;
+    if(!this._ok){
+      const ws=text.map(c=>ctx.measureText(c).width);
+      const tw=ws.reduce((a,b)=>a+b,0);
+      let x=(W()-tw)/2;
+      this._chars=text.map((c,i)=>{
+        const homeX=x+ws[i]/2,homeY=H()/2;
+        x+=ws[i];
+        return{c,homeX,homeY,x:homeX,y:-fs-Math.random()*H(),vy:0,delay:i*.08,w:ws[i],arrived:false};
+      });
+      this._ok=true;
+    }
+    const{r,g,b}=hex2rgb(params.color);
+    ctx.textBaseline='middle';ctx.textAlign='center';
+    this._chars.forEach(p=>{
+      if(this._t>p.delay&&!p.arrived){
+        p.vy+=.4*params.speed;
+        p.y+=p.vy;
+        p.x=p.homeX+Math.sin(p.y*.02)*params.spread*.3;
+        if(p.y>=p.homeY){p.y=p.homeY;p.x=p.homeX;p.vy=0;p.arrived=true;}
+      }
+      const a=p.arrived?1:Math.min(1,(p.y+H())/(H()));
+      ctx.font=`600 ${fs}px ${FN}`;
+      ctx.fillStyle=`rgba(${r},${g},${b},${Math.max(.1,a)})`;
+      ctx.fillText(p.c,p.x,p.y);
+    });
+    ctx.textAlign='left';
+    if(this._chars.every(p=>p.arrived)){setTimeout(()=>{this._ok=false;this._t=0;},2000);}
+  }
+};
+
+// ---- Breathing Type (inspired by @contemporarytype — font weight oscillates) ----
+effects.breathe = {
+  _t:0,animated:true,
+  params:[
+    {key:'fontSize',label:'Font Size',type:'range',min:24,max:100,value:52},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:2},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.015;
+    const text=[...txt()],fs=params.fontSize;
+    const{r,g,b}=hex2rgb(params.color);
+    ctx.textBaseline='middle';ctx.textAlign='center';
+    const cx=W()/2,cy=H()/2;
+    // measure total width at normal weight
+    ctx.font=`400 ${fs}px ${FN}`;
+    const ws=text.map(c=>ctx.measureText(c).width);
+    const tw=ws.reduce((a,b)=>a+b,0);
+    let x=cx-tw/2;
+    text.forEach((c,i)=>{
+      const phase=this._t+i*.3;
+      const breath=(Math.sin(phase)+1)/2; // 0-1
+      const weight=Math.round(100+breath*800); // 100-900
+      const scale=.85+breath*.3;
+      const a=.4+breath*.6;
+      ctx.save();
+      ctx.translate(x+ws[i]/2,cy);
+      ctx.scale(1,scale);
+      ctx.font=`${weight} ${fs}px ${FN}`;
+      ctx.textAlign='center';
+      ctx.fillStyle=`rgba(${r},${g},${b},${a})`;
+      ctx.fillText(c,0,0);
+      ctx.restore();
+      x+=ws[i];
+    });
+    ctx.textAlign='left';
+  }
+};
+
+// ---- Font Mixer (inspired by @antonin.work — each line different weight/style) ----
+effects.fontmix = {
+  _t:0,animated:true,
+  params:[
+    {key:'fontSize',label:'Font Size',type:'range',min:14,max:40,value:20},
+    {key:'lineHeight',label:'Line Height',type:'range',min:18,max:50,value:28},
+    {key:'maxW',label:'Max Width',type:'range',min:200,max:700,value:450},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:2},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.01;
+    const text=txt().repeat(5),fs=params.fontSize,lh=params.lineHeight,mw=params.maxW;
+    const styles=['100','300','400','600','700','900'];
+    const italics=[false,true,false,false,true,false];
+    const{r,g,b}=hex2rgb(params.color);
+    // wrap with base font
+    ctx.font=`${fs}px ${FN}`;
+    const{lines}=wrap(text,`${fs}px ${FN}`,mw,lh);
+    const x0=(W()-mw)/2,y0=(H()-lines.length*lh)/2;
+    ctx.textBaseline='top';
+    lines.forEach((l,i)=>{
+      const si=Math.floor((i+this._t*2)%styles.length);
+      const italic=italics[si]?'italic ':'';
+      ctx.font=`${italic}${styles[si]} ${fs}px ${FN}`;
+      const a=.5+.5*Math.sin(i*.7+this._t*3);
+      ctx.fillStyle=`rgba(${r},${g},${b},${Math.max(.3,a)})`;
+      ctx.fillText(l,x0,y0+i*lh);
+    });
+  }
+};
+
+// ---- Circular Type (inspired by @jaymehoffman — text arranged in a circle) ----
+effects.textcircle = {
+  _t:0,animated:true,
+  params:[
+    {key:'fontSize',label:'Font Size',type:'range',min:10,max:36,value:16},
+    {key:'radius',label:'Radius',type:'range',min:50,max:300,value:150},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:2},
+    {key:'rings',label:'Rings',type:'range',min:1,max:5,value:3},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.01;
+    const text=[...txt()],fs=params.fontSize,cx=W()/2,cy=H()/2;
+    const{r,g,b}=hex2rgb(params.color);
+    ctx.textBaseline='middle';ctx.textAlign='center';
+    for(let ring=0;ring<params.rings;ring++){
+      const R=params.radius+ring*fs*2.2;
+      const dir=ring%2===0?1:-1;
+      const circumference=2*Math.PI*R;
+      const charAngle=fs*.7/R;
+      const totalChars=Math.min(text.length*3,Math.floor(circumference/(fs*.6)));
+      for(let i=0;i<totalChars;i++){
+        const angle=i*charAngle*dir+this._t*dir*(1+ring*.3);
+        const x=cx+Math.cos(angle)*R;
+        const y=cy+Math.sin(angle)*R;
+        const ch=text[i%text.length];
+        const a=.3+.7*((Math.sin(angle+this._t)+1)/2);
+        ctx.save();ctx.translate(x,y);ctx.rotate(angle+Math.PI/2*dir);
+        ctx.font=`${fs}px ${FN}`;
+        ctx.fillStyle=`rgba(${r},${g},${b},${a})`;
+        ctx.fillText(ch,0,0);ctx.restore();
+      }
+    }
+    ctx.textAlign='left';
   }
 };
 
