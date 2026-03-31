@@ -61,6 +61,7 @@ const i18n = {
     ripple:'Char Ripple',lorenz:'Lorenz Attractor',cube:'Rotating Cube',terrain:'Terrain',dna:'DNA Helix',blackhole:'Black Hole',
     wave:'Text Wave',typewriter:'Typewriter',gravity:'Gravity Text',morph:'Glitch Morph',
     img2ascii:'Image to ASCII',orbit:'Text Orbit',helix:'Text Helix',scatter:'Scatter Type',
+    varasci:'Variable ASCII',editorial:'Editorial Engine',masonry:'Masonry',justify:'Justification',
     p_charSize:'Char Size',p_fontSize:'Font Size',p_speed:'Speed',p_color:'Color',p_chars:'Characters',
     p_count:'Count',p_size:'Size',p_intensity:'Intensity',p_scale:'Scale',p_density:'Density',
     p_arms:'Arms',p_rings:'Rings',p_trail:'Trail',p_pull:'Pull',p_length:'Length',p_strands:'Strands',
@@ -81,6 +82,7 @@ const i18n = {
     ripple:'字符涟漪',lorenz:'洛伦兹吸引子',cube:'旋转立方体',terrain:'地形生成',dna:'DNA 双螺旋',blackhole:'黑洞',
     wave:'文字波浪',typewriter:'打字机',gravity:'重力文字',morph:'故障变形',
     img2ascii:'图片转 ASCII',orbit:'文字轨道',helix:'文字螺旋',scatter:'散射文字',
+    varasci:'可变排印 ASCII',editorial:'编辑引擎',masonry:'瀑布流',justify:'对齐对比',
     p_charSize:'字符大小',p_fontSize:'字号',p_speed:'速度',p_color:'颜色',p_chars:'字符集',
     p_count:'数量',p_size:'尺寸',p_intensity:'强度',p_scale:'缩放',p_density:'密度',
     p_arms:'旋臂',p_rings:'环数',p_trail:'轨迹长度',p_pull:'引力',p_length:'长度',p_strands:'股数',
@@ -99,8 +101,8 @@ function applyI18n(){ document.querySelectorAll('[data-i18n]').forEach(el=>{el.t
 const effects = {};
 const cats = [
   {key:'cat_tool',items:['img2ascii']},
-  {key:'cat_layout',items:['multicolumn','textwrap','shrinkwrap','accordion','richtext']},
-  {key:'cat_ascii',items:['fluid','torus','particles','matrix','globe','plasma','starfield','spiral','textshape','tunnel','mandelbrot','life','clock','ripple','lorenz','cube','terrain','dna','blackhole']},
+  {key:'cat_layout',items:['multicolumn','textwrap','shrinkwrap','accordion','richtext','editorial','masonry','justify']},
+  {key:'cat_ascii',items:['varasci','fluid','torus','particles','matrix','globe','plasma','starfield','spiral','textshape','tunnel','mandelbrot','life','clock','ripple','lorenz','cube','terrain','dna','blackhole']},
   {key:'cat_fx',items:['wave','typewriter','gravity','morph','orbit','helix','scatter']},
 ];
 
@@ -1372,6 +1374,222 @@ effects.img2ascii = {
     const lines=ascii.split('\n');const lh=Math.max(3,cs);
     const x0=Math.max(0,(W()-aw*cs*.6)/2),y0=Math.max(0,(H()-ah*lh)/2);
     for(let i=0;i<lines.length;i++)ctx.fillText(lines[i],x0,y0+i*lh);
+  }
+};
+
+// ---- Variable Typographic ASCII (inspired by chenglou.me/pretext/variable-typographic-ascii) ----
+effects.varasci = {
+  _t:0,_particles:[],_attractors:[],animated:true,
+  params:[
+    {key:'charSize',label:'Char Size',type:'range',min:5,max:16,value:8},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:3},
+    {key:'count',label:'Count',type:'range',min:20,max:200,value:80},
+    {key:'chars',label:'Characters',type:'select',options:['shading','custom'],value:'shading'},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  init(){
+    this._particles=Array.from({length:200},()=>({x:Math.random()*800,y:Math.random()*600,vx:(Math.random()-.5)*2,vy:(Math.random()-.5)*2,life:Math.random()}));
+    this._attractors=[{x:200,y:200,s:120},{x:500,y:300,s:80}];
+  },
+  render(){
+    clr();this._t+=params.speed*.008;
+    const cs=params.charSize,cw=cs*.55,cols=Math.floor(W()/cw),rows=Math.floor(H()/cs);
+    const field=new Float32Array(cols*rows);
+    // update particles
+    this._particles.forEach(p=>{
+      this._attractors.forEach(a=>{const dx=a.x-p.x,dy=a.y-p.y,d=Math.sqrt(dx*dx+dy*dy)+1;p.vx+=dx/d*.3;p.vy+=dy/d*.3;});
+      p.vx*=.95;p.vy*=.95;p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0||p.x>W())p.vx*=-1;if(p.y<0||p.y>H())p.vy*=-1;
+      const ci=Math.floor(p.x/cw),ri=Math.floor(p.y/cs);
+      if(ci>=0&&ci<cols&&ri>=0&&ri<rows){for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+        const ni=ci+dx,nj=ri+dy;if(ni>=0&&ni<cols&&nj>=0&&nj<rows){const d=Math.sqrt(dx*dx+dy*dy);field[nj*cols+ni]+=Math.max(0,1-d/3);}}}
+    });
+    // update attractors
+    this._attractors.forEach((a,i)=>{a.x=W()/2+Math.sin(this._t+i*2)*W()*.3;a.y=H()/2+Math.cos(this._t*1.3+i)*H()*.3;});
+    // normalize
+    let mx=0;for(let i=0;i<field.length;i++)if(field[i]>mx)mx=field[i];
+    if(mx>0)for(let i=0;i<field.length;i++)field[i]/=mx;
+    // render proportional panel
+    const map={shading:'.,-~:;=!*#$@',custom:[...new Set([...txt()])].join('')||'@#*=:.'};
+    const chars=map[params.chars]||map.shading;
+    const{r,g,b}=hex2rgb(params.color);
+    // left half: proportional (Georgia)
+    const hw=Math.floor(cols/2);
+    ctx.textBaseline='top';
+    for(let j=0;j<rows;j++)for(let i=0;i<hw;i++){
+      const v=field[j*cols+i];if(v<.02)continue;
+      const ci=Math.floor(v*(chars.length-1));
+      ctx.font=v>.6?`bold ${cs}px Georgia`:v>.3?`italic ${cs}px Georgia`:`${cs}px Georgia`;
+      ctx.fillStyle=`rgba(${r},${g},${b},${v})`;
+      ctx.fillText(chars[ci],i*cw,j*cs);
+    }
+    // right half: monospace
+    for(let j=0;j<rows;j++)for(let i=hw;i<cols;i++){
+      const v=field[j*cols+i];if(v<.02)continue;
+      const ci=Math.floor(v*(chars.length-1));
+      ctx.font=`${cs}px monospace`;
+      ctx.fillStyle=`rgba(${r},${g},${b},${v})`;
+      ctx.fillText(chars[ci],i*cw,j*cs);
+    }
+    // divider
+    ctx.strokeStyle=dark?'#333':'#ccc';ctx.beginPath();ctx.moveTo(W()/2,0);ctx.lineTo(W()/2,H());ctx.stroke();
+    ctx.fillStyle=dark?'#555':'#999';ctx.font='10px monospace';ctx.textBaseline='top';
+    ctx.fillText('PROPORTIONAL',10,6);ctx.fillText('MONOSPACE',W()/2+10,6);
+  }
+};
+
+// ---- Editorial Engine (inspired by chenglou.me/pretext/editorial-engine) ----
+effects.editorial = {
+  _t:0,_orbs:[],animated:true,
+  init(){this._orbs=[{x:W()*.3,y:H()*.3,r:60,vx:1.2,vy:0.8},{x:W()*.7,y:H()*.6,r:45,vx:-0.9,vy:1.1}];},
+  params:[
+    {key:'fontSize',label:'Font Size',type:'range',min:11,max:24,value:14},
+    {key:'lineHeight',label:'Line Height',type:'range',min:16,max:36,value:21},
+    {key:'cols',label:'Columns',type:'range',min:1,max:3,value:2},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:2},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.01;
+    const m=30,font=`${params.fontSize}px ${FN}`,lh=params.lineHeight,text=txt().repeat(20);
+    const tw=W()-m*2,cw=(tw-(params.cols-1)*20)/params.cols;
+    // move orbs
+    this._orbs.forEach(o=>{
+      o.x+=o.vx*params.speed;o.y+=o.vy*params.speed;
+      if(o.x-o.r<0||o.x+o.r>W()){o.vx*=-1;}
+      if(o.y-o.r<0||o.y+o.r>H()){o.vy*=-1;}
+      // draw orb
+      const grd=ctx.createRadialGradient(o.x,o.y,0,o.x,o.y,o.r);
+      grd.addColorStop(0,dark?'rgba(255,255,255,.08)':'rgba(0,0,0,.05)');
+      grd.addColorStop(1,'transparent');
+      ctx.fillStyle=grd;ctx.beginPath();ctx.arc(o.x,o.y,o.r,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle=dark?'#333':'#ccc';ctx.stroke();
+    });
+    // flow text around orbs in columns
+    ctx.font=font;ctx.fillStyle=params.color;ctx.textBaseline='top';
+    let rem=text;
+    for(let c=0;c<params.cols&&rem.length>0;c++){
+      const cx=m+c*(cw+20);let y=m;
+      while(y<H()-m&&rem.length>0){
+        let lw=cw,x=cx;
+        // check orb collision
+        this._orbs.forEach(o=>{
+          if(y+lh>o.y-o.r&&y<o.y+o.r){
+            const dy=Math.abs(y+lh/2-o.y);
+            if(dy<o.r){const dx=Math.sqrt(o.r*o.r-dy*dy);
+              const orbL=o.x-dx,orbR=o.x+dx;
+              if(orbL>cx&&orbL<cx+cw){lw=orbL-cx-8;if(lw<30)lw=cw;}
+              else if(orbR>cx&&orbR<cx+cw){x=orbR+8;lw=cx+cw-orbR-8;if(lw<30){x=cx;lw=cw;}}
+            }
+          }
+        });
+        let line='';for(const ch of rem){if(ctx.measureText(line+ch).width>lw)break;line+=ch;}
+        rem=rem.slice(line.length);ctx.fillText(line,x,y);y+=lh;
+      }
+      // column divider
+      if(c<params.cols-1){ctx.strokeStyle=dark?'#1a1a1a':'#eee';ctx.beginPath();ctx.moveTo(cx+cw+10,m);ctx.lineTo(cx+cw+10,H()-m);ctx.stroke();}
+    }
+  }
+};
+
+// ---- Masonry (inspired by chenglou.me/pretext/masonry) ----
+effects.masonry = {
+  _cards:null,
+  params:[
+    {key:'fontSize',label:'Font Size',type:'range',min:10,max:18,value:12},
+    {key:'lineHeight',label:'Line Height',type:'range',min:14,max:28,value:18},
+    {key:'cols',label:'Columns',type:'range',min:2,max:5,value:3},
+    {key:'gap',label:'Gap',type:'range',min:4,max:20,value:8},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  init(){this._cards=null;},
+  render(){
+    clr();
+    const texts=[
+      'Pretext 可以在不触发 DOM 回流的情况下精确计算文本高度。',
+      'prepare() does the one-time work: normalize whitespace, segment the text, apply glue rules.',
+      '支持所有语言：中文、日文、阿拉伯文、emoji 🚀，甚至混合双向文本。',
+      'layout() is the cheap hot path: pure arithmetic over cached widths.',
+      '实现真正的虚拟列表，不需要先渲染再测量。0.09ms 搞定 500 条。',
+      'The returned height is the crucial last piece for unlocking web UI\'s.',
+      '文字环绕浮动元素：逐行设置不同宽度，layoutNextLine() 一行一行来。',
+      'walkLineRanges() gives you line widths and cursors without building text strings.',
+      '收缩包裹：找到最紧凑的容器宽度，CSS 做不到的事。',
+      'Zero layout reflow. You could shrinkwrap 10,000 bubbles and the browser wouldn\'t blink.',
+      txt().slice(0,80)||'Custom text goes here.',
+      '可以渲染到 Canvas、SVG、WebGL，甚至服务端。',
+    ];
+    const font=`${params.fontSize}px ${FN}`,lh=params.lineHeight,gap=params.gap,nc=params.cols;
+    const m=20,totalW=W()-m*2,colW=(totalW-(nc-1)*gap)/nc;
+    const colH=new Array(nc).fill(m);
+    ctx.font=font;
+    const{r,g,b}=hex2rgb(params.color);
+    texts.forEach((text,ti)=>{
+      // find shortest column
+      let minC=0;for(let c=1;c<nc;c++)if(colH[c]<colH[minC])minC=c;
+      const x=m+minC*(colW+gap),y=colH[minC];
+      const{lines}=wrap(text,font,colW-16,lh);
+      const cardH=lines.length*lh+16;
+      // card bg
+      ctx.fillStyle=dark?'#141414':'#f8f8f8';
+      ctx.beginPath();ctx.roundRect(x,y,colW,cardH,6);ctx.fill();
+      ctx.strokeStyle=dark?'#222':'#e0e0e0';ctx.stroke();
+      // text
+      ctx.fillStyle=`rgba(${r},${g},${b},.85)`;ctx.font=font;ctx.textBaseline='top';
+      lines.forEach((l,li)=>ctx.fillText(l,x+8,y+8+li*lh));
+      colH[minC]=y+cardH+gap;
+    });
+  }
+};
+
+// ---- Justification Comparison (inspired by chenglou.me/pretext/justification) ----
+effects.justify = {
+  params:[
+    {key:'fontSize',label:'Font Size',type:'range',min:12,max:24,value:15},
+    {key:'lineHeight',label:'Line Height',type:'range',min:16,max:36,value:22},
+    {key:'maxW',label:'Max Width',type:'range',min:150,max:400,value:260},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  render(){
+    clr();
+    const text=txt().repeat(3)||'The quick brown fox jumps over the lazy dog. '.repeat(5);
+    const font=`${params.fontSize}px ${FN}`,lh=params.lineHeight,mw=params.maxW;
+    const{r,g,b}=hex2rgb(params.color);
+    const modes=['Left','Center','Justify'];
+    const gap=30,totalW=modes.length*mw+(modes.length-1)*gap;
+    const x0=(W()-totalW)/2,y0=40;
+    ctx.font=font;
+    modes.forEach((mode,mi)=>{
+      const bx=x0+mi*(mw+gap);
+      // header
+      ctx.fillStyle=dark?'#555':'#999';ctx.font='10px monospace';ctx.textBaseline='top';
+      ctx.fillText(mode.toUpperCase(),bx,y0-16);
+      // border
+      ctx.strokeStyle=dark?'#222':'#ddd';ctx.strokeRect(bx,y0,mw,H()-y0*2);
+      // wrap text
+      ctx.font=font;
+      const{lines}=wrap(text,font,mw-16,lh);
+      ctx.textBaseline='top';
+      lines.forEach((line,li)=>{
+        if(li*lh+y0+8>H()-y0)return;
+        const tw=ctx.measureText(line).width;
+        if(mode==='Left'){
+          ctx.fillStyle=`rgb(${r},${g},${b})`;ctx.fillText(line,bx+8,y0+8+li*lh);
+        }else if(mode==='Center'){
+          ctx.fillStyle=`rgb(${r},${g},${b})`;ctx.fillText(line,bx+8+(mw-16-tw)/2,y0+8+li*lh);
+        }else{
+          // justify: spread words
+          const words=line.split(/\s+/);
+          if(words.length<=1||li===lines.length-1){ctx.fillStyle=`rgb(${r},${g},${b})`;ctx.fillText(line,bx+8,y0+8+li*lh);return;}
+          const wordsW=words.map(w=>ctx.measureText(w).width);
+          const totalWordsW=wordsW.reduce((a,b)=>a+b,0);
+          const extraSpace=(mw-16-totalWordsW)/(words.length-1);
+          let wx=bx+8;
+          ctx.fillStyle=`rgb(${r},${g},${b})`;
+          words.forEach((w,wi)=>{ctx.fillText(w,wx,y0+8+li*lh);wx+=wordsW[wi]+extraSpace;});
+        }
+      });
+    });
   }
 };
 
