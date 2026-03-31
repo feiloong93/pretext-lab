@@ -62,6 +62,7 @@ const i18n = {
     wave:'Text Wave',typewriter:'Typewriter',gravity:'Gravity Text',morph:'Glitch Morph',
     img2ascii:'Image to ASCII',orbit:'Text Orbit',helix:'Text Helix',scatter:'Scatter Type',
     varasci:'Variable ASCII',editorial:'Editorial Engine',masonry:'Masonry',justify:'Justification',
+    autogrow:'Auto-Grow Input',bubblewar:'Bubble Showdown',textphysics:'Text Physics',obstacle:'Obstacle Flow',
     p_charSize:'Char Size',p_fontSize:'Font Size',p_speed:'Speed',p_color:'Color',p_chars:'Characters',
     p_count:'Count',p_size:'Size',p_intensity:'Intensity',p_scale:'Scale',p_density:'Density',
     p_arms:'Arms',p_rings:'Rings',p_trail:'Trail',p_pull:'Pull',p_length:'Length',p_strands:'Strands',
@@ -83,6 +84,7 @@ const i18n = {
     wave:'文字波浪',typewriter:'打字机',gravity:'重力文字',morph:'故障变形',
     img2ascii:'图片转 ASCII',orbit:'文字轨道',helix:'文字螺旋',scatter:'散射文字',
     varasci:'可变排印 ASCII',editorial:'编辑引擎',masonry:'瀑布流',justify:'对齐对比',
+    autogrow:'自增长输入框',bubblewar:'气泡收缩对决',textphysics:'文字物理',obstacle:'障碍绕流',
     p_charSize:'字符大小',p_fontSize:'字号',p_speed:'速度',p_color:'颜色',p_chars:'字符集',
     p_count:'数量',p_size:'尺寸',p_intensity:'强度',p_scale:'缩放',p_density:'密度',
     p_arms:'旋臂',p_rings:'环数',p_trail:'轨迹长度',p_pull:'引力',p_length:'长度',p_strands:'股数',
@@ -101,9 +103,9 @@ function applyI18n(){ document.querySelectorAll('[data-i18n]').forEach(el=>{el.t
 const effects = {};
 const cats = [
   {key:'cat_tool',items:['img2ascii']},
-  {key:'cat_layout',items:['multicolumn','textwrap','shrinkwrap','accordion','richtext','editorial','masonry','justify']},
+  {key:'cat_layout',items:['multicolumn','textwrap','shrinkwrap','accordion','richtext','editorial','masonry','justify','autogrow','bubblewar','obstacle']},
   {key:'cat_ascii',items:['varasci','fluid','torus','particles','matrix','globe','plasma','starfield','spiral','textshape','tunnel','mandelbrot','life','clock','ripple','lorenz','cube','terrain','dna','blackhole']},
-  {key:'cat_fx',items:['wave','typewriter','gravity','morph','orbit','helix','scatter']},
+  {key:'cat_fx',items:['wave','typewriter','gravity','morph','orbit','helix','scatter','textphysics']},
 ];
 
 // ---- Sidebar ----
@@ -1590,6 +1592,203 @@ effects.justify = {
         }
       });
     });
+  }
+};
+
+// ---- Auto-Grow Input ----
+effects.autogrow = {
+  params:[
+    {key:'fontSize',label:'Font Size',type:'range',min:12,max:36,value:16},
+    {key:'lineHeight',label:'Line Height',type:'range',min:16,max:48,value:24},
+    {key:'maxW',label:'Max Width',type:'range',min:150,max:600,value:400},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  render(){
+    clr();const text=txt(),font=`${params.fontSize}px ${FN}`,lh=params.lineHeight,mw=params.maxW;
+    const{lines,height}=wrap(text,font,mw,lh);
+    const pad=12,bw=mw+pad*2,bh=height+pad*2;
+    const bx=(W()-bw)/2,by=(H()-bh)/2;
+    // textarea box
+    ctx.fillStyle=dark?'#141414':'#fafafa';ctx.beginPath();ctx.roundRect(bx,by,bw,bh,6);ctx.fill();
+    ctx.strokeStyle=dark?'#333':'#ccc';ctx.stroke();
+    // text
+    ctx.font=font;ctx.fillStyle=params.color;ctx.textBaseline='top';
+    lines.forEach((l,i)=>ctx.fillText(l,bx+pad,by+pad+i*lh));
+    // cursor
+    const last=lines[lines.length-1]||'';
+    ctx.fillStyle=params.color;ctx.globalAlpha=Math.sin(Date.now()*.005)>.0?1:0;
+    ctx.fillRect(bx+pad+ctx.measureText(last).width+2,by+pad+(lines.length-1)*lh,2,params.fontSize);
+    ctx.globalAlpha=1;
+    // metrics
+    ctx.fillStyle=dark?'#555':'#999';ctx.font='10px monospace';ctx.textBaseline='top';
+    ctx.fillText(`height: ${Math.round(height)}px | lines: ${lines.length} | width: ${mw}px`,bx,by+bh+8);
+    ctx.fillText(lang==='zh'?'← 高度由 pretext 纯算术预测，无 DOM 回流':'← Height predicted by pretext, zero DOM reflow',bx,by+bh+22);
+    // animated resize indicator
+    ctx.setLineDash([3,3]);ctx.strokeStyle=dark?'#333':'#bbb';
+    ctx.strokeRect(bx-4,by-4,bw+8,bh+8);ctx.setLineDash([]);
+  }
+};
+
+// ---- Bubble Showdown (CSS fit-content vs pretext shrinkwrap) ----
+effects.bubblewar = {
+  params:[
+    {key:'fontSize',label:'Font Size',type:'range',min:11,max:20,value:13},
+    {key:'lineHeight',label:'Line Height',type:'range',min:14,max:30,value:19},
+    {key:'maxW',label:'Max Width',type:'range',min:150,max:500,value:280},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  render(){
+    clr();const font=`${params.fontSize}px ${FN}`,lh=params.lineHeight,mw=params.maxW;
+    const msgs=[txt().slice(0,60)||'Hey, did you see the new Pretext library?',
+      'It measures text without the DOM. Pure JavaScript arithmetic.',
+      '支持中文、韩文、阿拉伯文、emoji 🚀 全部搞定。',
+      'The shrinkwrap demo is wild — CSS can\'t do that.'];
+    const gap=40,colW=(W()-gap*3)/2;
+    // Left: CSS fit-content simulation
+    ctx.fillStyle=dark?'#555':'#999';ctx.font='10px monospace';ctx.textBaseline='top';
+    ctx.fillText('CSS fit-content',gap,20);
+    ctx.fillText('Pretext shrinkwrap',gap*2+colW,20);
+    let ly=40,ry=40;
+    msgs.forEach((msg,mi)=>{
+      ctx.font=font;
+      const{lines}=wrap(msg,font,mw,lh);
+      // CSS: width = widest line
+      let maxLW=0;lines.forEach(l=>{const w=ctx.measureText(l).width;if(w>maxLW)maxLW=w;});
+      const cssBW=Math.min(maxLW+20,colW);
+      const cssH=lines.length*lh+16;
+      // draw CSS bubble
+      const cx1=mi%2===0?gap:gap+colW-cssBW;
+      ctx.fillStyle=mi%2===0?(dark?'#1a1a1a':'#f0f0f0'):(dark?'#1a1810':'#fdf8f0');
+      ctx.beginPath();ctx.roundRect(cx1,ly,cssBW,cssH,8);ctx.fill();
+      ctx.font=font;ctx.fillStyle=`rgba(${hex2rgb(params.color).r},${hex2rgb(params.color).g},${hex2rgb(params.color).b},.85)`;ctx.textBaseline='top';
+      lines.forEach((l,li)=>ctx.fillText(l,cx1+10,ly+8+li*lh));
+      // wasted pixels indicator
+      const lastW=ctx.measureText(lines[lines.length-1]).width;
+      const waste=Math.round(cssBW-10-lastW);
+      if(waste>20){ctx.fillStyle='rgba(255,80,80,.15)';ctx.fillRect(cx1+10+lastW,ly+8+(lines.length-1)*lh,waste,lh);
+        ctx.fillStyle='rgba(255,80,80,.5)';ctx.font='8px monospace';ctx.fillText(`${waste}px`,cx1+10+lastW+2,ly+8+(lines.length-1)*lh);}
+      ly+=cssH+8;
+      // Pretext: binary search tightest width
+      let lo=params.fontSize*2,hi=mw,best=mw;
+      const targetLines=lines.length;
+      while(lo<=hi){const mid=Math.floor((lo+hi)/2);const{lines:tl}=wrap(msg,font,mid,lh);
+        if(tl.length<=targetLines){best=mid;hi=mid-1;}else lo=mid+1;}
+      const ptBW=best+20;
+      const ptH=lines.length*lh+16;
+      const cx2=mi%2===0?gap*2+colW:gap*2+colW*2-ptBW;
+      ctx.fillStyle=mi%2===0?(dark?'#1a1a1a':'#f0f0f0'):(dark?'#1a1810':'#fdf8f0');
+      ctx.beginPath();ctx.roundRect(cx2,ry,ptBW,ptH,8);ctx.fill();
+      ctx.font=font;ctx.fillStyle=`rgba(${hex2rgb(params.color).r},${hex2rgb(params.color).g},${hex2rgb(params.color).b},.85)`;ctx.textBaseline='top';
+      const{lines:ptLines}=wrap(msg,font,best,lh);
+      ptLines.forEach((l,li)=>ctx.fillText(l,cx2+10,ry+8+li*lh));
+      ry+=ptH+8;
+    });
+  }
+};
+
+// ---- Obstacle Flow (text flowing around multiple obstacles) ----
+effects.obstacle = {
+  _t:0,animated:true,
+  params:[
+    {key:'fontSize',label:'Font Size',type:'range',min:11,max:22,value:14},
+    {key:'lineHeight',label:'Line Height',type:'range',min:14,max:32,value:20},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:2},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.01;
+    const text=txt().repeat(20),font=`${params.fontSize}px ${FN}`,lh=params.lineHeight,m=30,fw=W()-m*2;
+    // 3 moving obstacles
+    const obs=[
+      {x:W()*.25+Math.sin(this._t)*60,y:H()*.25+Math.cos(this._t*1.3)*40,r:50},
+      {x:W()*.65+Math.cos(this._t*.8)*50,y:H()*.5+Math.sin(this._t*1.1)*50,r:40},
+      {x:W()*.4+Math.sin(this._t*1.5)*70,y:H()*.75+Math.cos(this._t*.7)*30,r:35},
+    ];
+    // draw obstacles
+    obs.forEach((o,i)=>{
+      const grd=ctx.createRadialGradient(o.x,o.y,0,o.x,o.y,o.r);
+      grd.addColorStop(0,`hsla(${i*120+this._t*20},60%,50%,.15)`);grd.addColorStop(1,'transparent');
+      ctx.fillStyle=grd;ctx.beginPath();ctx.arc(o.x,o.y,o.r,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle=`hsla(${i*120+this._t*20},60%,50%,.3)`;ctx.stroke();
+    });
+    // flow text
+    ctx.font=font;ctx.fillStyle=params.color;ctx.textBaseline='top';
+    let y=m,rem=text;
+    while(y<H()-m&&rem.length>0){
+      let lw=fw,x=m;
+      // check all obstacles
+      obs.forEach(o=>{
+        if(y+lh>o.y-o.r-4&&y<o.y+o.r+4){
+          const dy=Math.abs(y+lh/2-o.y);
+          if(dy<o.r){const dx=Math.sqrt(o.r*o.r-dy*dy);
+            const oL=o.x-dx,oR=o.x+dx;
+            if(oR>x&&oL<x+lw){
+              if(oL-x>x+lw-oR){lw=oL-x-6;}
+              else{const newX=oR+6;lw-=(newX-x);x=newX;}
+            }
+          }
+        }
+      });
+      if(lw<20){y+=lh;continue;}
+      let line='';for(const c of rem){if(ctx.measureText(line+c).width>lw)break;line+=c;}
+      rem=rem.slice(line.length);ctx.fillText(line,x,y);y+=lh;
+    }
+  }
+};
+
+// ---- Text Physics (letters with gravity, collision, bounce) ----
+effects.textphysics = {
+  _chars:[],_ok:false,animated:true,
+  init(){this._ok=false;},
+  params:[
+    {key:'fontSize',label:'Font Size',type:'range',min:18,max:60,value:32},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:3},
+    {key:'grav',label:'Gravity',type:'range',min:0,max:20,value:5},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  render(){
+    clr();const text=[...txt()],fs=params.fontSize;
+    ctx.font=`600 ${fs}px ${FN}`;
+    if(!this._ok||this._chars.length!==text.length){
+      const ws=text.map(c=>ctx.measureText(c).width);
+      const tw=ws.reduce((a,b)=>a+b,0);
+      let x=(W()-tw)/2;
+      this._chars=text.map((c,i)=>{
+        const cx=x+ws[i]/2;x+=ws[i];
+        return{c,x:cx,y:H()/3,vx:(Math.random()-.5)*8*params.speed,vy:(Math.random()-1)*6*params.speed,
+          w:ws[i],rot:0,vrot:(Math.random()-.5)*.2,grounded:false};
+      });
+      this._ok=true;
+    }
+    const floor=H()-30,{r,g,b}=hex2rgb(params.color);
+    ctx.textBaseline='middle';ctx.textAlign='center';
+    // physics step
+    this._chars.forEach(p=>{
+      if(!p.grounded){
+        p.vy+=params.grav*.15;p.vx*=.995;
+        p.x+=p.vx*params.speed*.3;p.y+=p.vy*params.speed*.3;p.rot+=p.vrot*params.speed;
+        // floor
+        if(p.y+fs/2>floor){p.y=floor-fs/2;p.vy*=-.4;p.vrot*=.7;
+          if(Math.abs(p.vy)<1){p.vy=0;p.vx*=.9;p.vrot*=.5;if(Math.abs(p.vx)<.3)p.grounded=true;}}
+        // walls
+        if(p.x<fs/2){p.x=fs/2;p.vx*=-.6;}
+        if(p.x>W()-fs/2){p.x=W()-fs/2;p.vx*=-.6;}
+      }
+      // char-char collision (simple)
+      this._chars.forEach(q=>{if(p===q)return;
+        const dx=p.x-q.x,dy=p.y-q.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d<fs*.6&&d>0){const nx=dx/d,ny=dy/d;const push=.5;p.vx+=nx*push;p.vy+=ny*push;q.vx-=nx*push;q.vy-=ny*push;}
+      });
+      const a=p.grounded?.6:1;
+      ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);
+      ctx.font=`600 ${fs}px ${FN}`;ctx.fillStyle=`rgba(${r},${g},${b},${a})`;
+      ctx.fillText(p.c,0,0);ctx.restore();
+    });
+    ctx.textAlign='left';
+    // floor
+    ctx.strokeStyle=dark?'#222':'#ddd';ctx.beginPath();ctx.moveTo(0,floor);ctx.lineTo(W(),floor);ctx.stroke();
+    // auto reset
+    if(this._chars.every(p=>p.grounded)){setTimeout(()=>{this._ok=false;},2000);}
   }
 };
 
