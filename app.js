@@ -64,6 +64,7 @@ const i18n = {
     varasci:'Variable ASCII',editorial:'Editorial Engine',masonry:'Masonry',justify:'Justification',
     autogrow:'Auto-Grow Input',bubblewar:'Bubble Showdown',textphysics:'Text Physics',obstacle:'Obstacle Flow',
     kineflow:'Kinetic Flow',textpour:'Text Pour',breathe:'Breathing Type',fontmix:'Font Mixer',textcircle:'Circular Type',
+    cascade:'Word Cascade',
     p_charSize:'Char Size',p_fontSize:'Font Size',p_speed:'Speed',p_color:'Color',p_chars:'Characters',
     p_count:'Count',p_size:'Size',p_intensity:'Intensity',p_scale:'Scale',p_density:'Density',
     p_arms:'Arms',p_rings:'Rings',p_trail:'Trail',p_pull:'Pull',p_length:'Length',p_strands:'Strands',
@@ -87,6 +88,7 @@ const i18n = {
     varasci:'可变排印 ASCII',editorial:'编辑引擎',masonry:'瀑布流',justify:'对齐对比',
     autogrow:'自增长输入框',bubblewar:'气泡收缩对决',textphysics:'文字物理',obstacle:'障碍绕流',
     kineflow:'动态排版流',textpour:'文字倾泻',breathe:'呼吸字体',fontmix:'字重混排',textcircle:'环形排版',
+    cascade:'词语瀑布',
     p_charSize:'字符大小',p_fontSize:'字号',p_speed:'速度',p_color:'颜色',p_chars:'字符集',
     p_count:'数量',p_size:'尺寸',p_intensity:'强度',p_scale:'缩放',p_density:'密度',
     p_arms:'旋臂',p_rings:'环数',p_trail:'轨迹长度',p_pull:'引力',p_length:'长度',p_strands:'股数',
@@ -107,7 +109,7 @@ const cats = [
   {key:'cat_tool',items:['img2ascii']},
   {key:'cat_layout',items:['multicolumn','textwrap','shrinkwrap','accordion','richtext','editorial','masonry','justify','autogrow','bubblewar','obstacle']},
   {key:'cat_ascii',items:['varasci','fluid','torus','particles','matrix','globe','plasma','starfield','spiral','textshape','tunnel','mandelbrot','life','clock','ripple','lorenz','cube','terrain','dna','blackhole']},
-  {key:'cat_fx',items:['wave','typewriter','gravity','morph','orbit','helix','scatter','textphysics','kineflow','textpour','breathe','fontmix','textcircle']},
+  {key:'cat_fx',items:['wave','typewriter','gravity','morph','orbit','helix','scatter','textphysics','kineflow','textpour','breathe','fontmix','textcircle','cascade']},
 ];
 
 // ---- Sidebar ----
@@ -2000,6 +2002,64 @@ effects.textcircle = {
       }
     }
     ctx.textAlign='left';
+  }
+};
+
+// ---- Word Cascade (inspired by @soggyburritowu — extract words by initial letter, cascade them) ----
+effects.cascade = {
+  _t:0,_words:null,animated:true,
+  init(){this._words=null;this._t=0;},
+  params:[
+    {key:'fontSize',label:'Font Size',type:'range',min:11,max:28,value:14},
+    {key:'lineHeight',label:'Line Height',type:'range',min:14,max:36,value:20},
+    {key:'maxW',label:'Max Width',type:'range',min:150,max:500,value:340},
+    {key:'speed',label:'Speed',type:'range',min:0.1,step:0.1,max:10,value:3},
+    {key:'color',label:'Color',type:'color',value:'#ffffff'},
+  ],
+  render(){
+    clr();this._t+=params.speed*.02;
+    const text=txt(),font=`${params.fontSize}px ${FN}`,lh=params.lineHeight;
+    const halfW=W()/2-20;
+    // left side: full paragraph
+    ctx.font=font;ctx.fillStyle=params.color;ctx.textBaseline='top';
+    const{lines}=wrap(text,font,Math.min(params.maxW,halfW-20),lh);
+    const lx=20,ly=30;
+    lines.forEach((l,i)=>ctx.fillText(l,lx,ly+i*lh));
+    // right side: extract words starting with the most common initial letter
+    const words=text.split(/\s+/).filter(w=>w.length>1);
+    const freq={};words.forEach(w=>{const c=w[0].toUpperCase();freq[c]=(freq[c]||0)+1;});
+    let topChar='';let topN=0;for(const c in freq)if(freq[c]>topN){topN=freq[c];topChar=c;}
+    const filtered=words.filter(w=>w[0].toUpperCase()===topChar);
+    if(filtered.length===0)return;
+    // cascade layout: each word appears with typewriter timing and staggered indent
+    const rx=W()/2+20,ry=30;
+    const cascadeFont=`${params.fontSize}px monospace`;
+    ctx.font=cascadeFont;
+    const visibleCount=Math.min(filtered.length,Math.floor(this._t*2));
+    // label
+    ctx.fillStyle=dark?'#444':'#aaa';ctx.font='10px monospace';ctx.textBaseline='top';
+    ctx.fillText(`"${topChar}" words extracted`,rx,ry-16);
+    ctx.font=cascadeFont;
+    for(let i=0;i<visibleCount&&i<filtered.length;i++){
+      const w=filtered[i];
+      // staggered indent based on word position in original text
+      const origIdx=text.toLowerCase().indexOf(w.toLowerCase());
+      const indent=(origIdx%7)*params.fontSize*1.2;
+      const y=ry+i*lh*1.3;
+      if(y>H()-20)break;
+      // fade in
+      const age=this._t*2-i;
+      const a=Math.min(1,age*.5);
+      const{r,g,b}=hex2rgb(params.color);
+      ctx.fillStyle=`rgba(${r},${g},${b},${a})`;
+      ctx.fillText(w,rx+indent,y);
+    }
+    // divider
+    ctx.strokeStyle=dark?'#222':'#ddd';ctx.beginPath();ctx.moveTo(W()/2,10);ctx.lineTo(W()/2,H()-10);ctx.stroke();
+    // loop
+    if(visibleCount>=filtered.length){
+      if(this._t>filtered.length/2+3){this._t=0;}
+    }
   }
 };
 
